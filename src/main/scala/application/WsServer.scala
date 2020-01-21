@@ -49,35 +49,37 @@ object application {
    * https://medium.com/@ghostdogpr/combining-zio-and-akka-to-enable-distributed-fp-in-scala-61ffb81e3283
    *
    */
-  //val WsServer: Config => AppTaskRes[Int] = conf => {
-    val WsServer:  AppTaskRes[Int]  = {
-    //open db connection or setup dbcp
-    //create http server ans start listener
-    //never return result when success processing request, or return Fail.
-    //dbConf = conf.dbConfig
-    /*
-       нечто подобное должно делаться когда уже будет поднят http сервер
-                 db <- ZIO.accessM[DbExecutor](_.dbExecutor.db(dbConf.))
-      */
+  val WsServer: Config => AppTaskRes[Int] = conf => {
     Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
         for {
-         reqHandlerResult <- startRequestHandler(actorSystem)
+         reqHandlerResult <- startRequestHandler(conf,actorSystem)
         } yield reqHandlerResult
     )
-
   }
 
-
-  def startRequestHandler(actorSystem: ActorSystem) :Task[Int] = {
+  def startRequestHandler(conf :Config, actorSystem: ActorSystem) :Task[Int] = {
     implicit val system = actorSystem
     implicit val timeout: Timeout = Timeout(10 seconds)
+    val log = Logging(system,"WsDb")
+    log.info(s"Endpoint from config file address = ${conf.api.endpoint} port = ${conf.api.port}")
     val serverSource = Http(actorSystem).bind(interface = "127.0.0.1", port = 8080)
+
+    val logRequest : HttpRequest => Unit = req => {
+      log.info(s"================= ${req.method} REQUEST ${req.protocol.value} =============")
+      log.info(s"uri : ${req.uri} ")
+      log.info("  ---------- HEADER ---------")
+      req.headers.zipWithIndex.foreach(hdr => log.info(s"   #${hdr._2} : ${hdr._1.toString}"))
+      log.info("  ---------------------------")
+      log.info(s"entity ${req.entity.toString} ")
+      log.info("========================================================")
+    }
 
     val reqHandler: HttpRequest => Future[HttpResponse] = {
       case request@HttpRequest(HttpMethods.GET, Uri.Path ("/"), httpHeader, requestEntity, requestProtocol)
-      => Future.successful {
-        val resJson: Json = s"SimpleString ${request.uri}".asJson
+      => logRequest(request)
+        Future.successful {
+        val resJson: Json = s"SimpleTestString ${request.uri}".asJson
         HttpResponse (
           StatusCodes.OK,
           entity = HttpEntity (`application/json`, Printer.noSpaces.print (resJson))
@@ -88,12 +90,16 @@ object application {
         Future.successful{HttpResponse(404, entity = "Unknown resource!")}
     }
 
+
     val bindingFuture: Future[Http.ServerBinding] =
       serverSource.to(Sink.foreach { connection =>
         connection.handleWithAsyncHandler(reqHandler)
       }).run
 
+    //bindingFuture
     Task(1)
+    //return 1 if everything ok in processing request-response. Never return, because cycle nature.
+    //or return Task(0)
   }
 
 
