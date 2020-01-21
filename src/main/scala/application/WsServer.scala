@@ -49,8 +49,8 @@ object application {
    * https://medium.com/@ghostdogpr/combining-zio-and-akka-to-enable-distributed-fp-in-scala-61ffb81e3283
    *
    */
-  val WsServer: Config => AppTaskRes[Int] = conf => {
-
+  //val WsServer: Config => AppTaskRes[Int] = conf => {
+    val WsServer:  AppTaskRes[Int]  = {
     //open db connection or setup dbcp
     //create http server ans start listener
     //never return result when success processing request, or return Fail.

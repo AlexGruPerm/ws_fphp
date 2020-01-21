@@ -1,6 +1,7 @@
 package enironments
 
 //import conf.Configuration
+import confs.Configuration
 import db.DbExecutor
 import zio.{RIO, ZEnv, ZIO}
 
@@ -16,7 +17,7 @@ object env {
     //with Configuration
     //with DbExecutor
 
-  type RunResType[A] = ZIO[AppEnvironment, Nothing, A]
+  type RunResType[A] = ZIO[ZEnv, Nothing, A]
 
   type AppTaskRes[A] = ZIO[AppEnvironment, Throwable, A]
 
