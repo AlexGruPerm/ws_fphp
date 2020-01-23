@@ -38,7 +38,7 @@ object Main extends zio.App {
   */
   private val WsApp: List[String] => AppTaskRes[Int]  = args =>
     for {
-      _ <- putStrLn("Web service starting...")
+      _ <- putStrLn("[1]Web service starting...")
       conf: Either[ConfigReaderFailures, Config] <-
         Configuration.config.loadFile("C:\\ws_fphp\\src\\main\\resources\\application.conf") //todo: args[0] how in ZIO?
       res <- conf.fold(
@@ -48,11 +48,13 @@ object Main extends zio.App {
         },
         SuccessConf => {
           val dbConf = SuccessConf.dbConfig
-          println(s"Successful read config file. DB type = ${dbConf.dbtype} url = ${dbConf.url}")
+          println(s"[2]Successful read config file. DB type = ${dbConf.dbtype} url = ${dbConf.url}")
           application.WsServer(SuccessConf)
         }
-      )
-      _ <- putStrLn("Web service stopping...")
+      )//.forever.fork
+      //
+      //
+      _ <- putStrLn("[7] Web service stopping...")
     } yield res
 
 }
