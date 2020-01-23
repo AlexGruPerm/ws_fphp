@@ -40,7 +40,7 @@ import scala.concurrent.Future
 import scala.language.postfixOps
 */
 
-object WsServer {
+object WsServObj {
 
   private val logRequest: (LoggingAdapter,HttpRequest) => Unit = (log,req) => {
     log.info(s"================= ${req.method} REQUEST ${req.protocol.value} =============")
@@ -58,22 +58,22 @@ object WsServer {
    * https://medium.com/@ghostdogpr/combining-zio-and-akka-to-enable-distributed-fp-in-scala-61ffb81e3283
    *
    */
-  val WsServer: Config => AppTaskRes[Int] = conf => {
+  val WsServer: Config => AppTaskRes[Unit] = conf => {
     val ActSys = ActorSystem("WsDb")
     //startRequestHandler(conf,ActSys)
 
     Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
-         for {
+        for {
           _ <- putStrLn("[3]Call startRequestHandler from WsServer.")
-         reqHandlerResult :Int <- startRequestHandler(conf,actorSystem)
+          reqHandlerResult <- startRequestHandler(conf, actorSystem)
           _ <- putStrLn("[6]After startRequestHandler from WsServer.")
         } yield reqHandlerResult
-        )
+    )
 
   }
 
-  def startRequestHandler(conf :Config, actorSystem: ActorSystem) :Task[Int] = {
+  def startRequestHandler(conf :Config, actorSystem: ActorSystem) :Task[Unit] = {
     implicit val system = actorSystem
     implicit val timeout: Timeout = Timeout(10 seconds)
     implicit val executionContext = system.dispatcher
@@ -113,7 +113,7 @@ object WsServer {
       }
 
     log.info("[5]Step before return Task(1) from startRequestHandler.")
-    UIO.succeed(1)
+    UIO.succeed(())
   }
 
   /*

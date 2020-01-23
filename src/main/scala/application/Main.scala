@@ -29,13 +29,15 @@ object Main extends zio.App {
   /**
    *
   */
-  private val WsApp: List[String] => AppTaskRes[Int]  = args =>
+  private val WsApp: List[String] => AppTaskRes[Unit]  = args =>
     for {
       _ <- putStrLn("[1]Web service starting...")
       _ <- if (args.length < 0) Task.fail(new IllegalArgumentException("Need config file as parameter."))
       else UIO.succeed(()) //If args.length correct just return succeed effect
+      //todo: Use config        <- ZIO.fromEither(default.load[AppConfig]).mapError(InvalidConfig)
       conf: Either[ConfigReaderFailures, Config] <-
         Configuration.config.loadFile("C:\\ws_fphp\\src\\main\\resources\\application.conf")
+      //todo: use res <- _ <- WsServObj.WsServer(config)
       res <- conf.fold(
         FailConfig => {
           println(s"Can't load config file. Error ${FailConfig.toString}")
@@ -44,7 +46,7 @@ object Main extends zio.App {
         SuccessConf => {
           val dbConf = SuccessConf.dbConfig
           println(s"[2]Successful read config file. DB type = ${dbConf.dbtype} url = ${dbConf.url}")
-          WsServer.WsServer(SuccessConf)
+          WsServObj.WsServer(SuccessConf)
         }
       )
       _ <- putStrLn("[7] Web service stopping...")
