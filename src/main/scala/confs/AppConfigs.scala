@@ -1,13 +1,13 @@
 package confs
 
-case class Config(api: ApiConfig, dbConfig: DbConfig)
+final case class Config(api: ApiConfig, dbConfig: DbConfig)
 
-case class ApiConfig(endpoint: String, port: Int)
+final case class ApiConfig(endpoint: String, port: Int)
 
-case class DbConfig(dbtype: String,
-                    driver: String,
-                    url: String,
-                    numThreads: Int,
-                    user: String,
-                    password: String)
+final case class DbConfig(dbtype: String,
+                          driver: String,
+                          url: String,
+                          numThreads: Int,
+                          user: String,
+                          password: String)
 

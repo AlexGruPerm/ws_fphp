@@ -1,4 +1,4 @@
-package enironments
+package environments
 
 //import conf.Configuration
 import confs.Configuration

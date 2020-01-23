@@ -1,11 +1,11 @@
 package application
 
 import confs.{Config, Configuration}
-import enironments.env.{AppTaskRes, RunResType}
+import environments.env.{AppTaskRes, RunResType}
 import org.slf4j.LoggerFactory
 import pureconfig.error.ConfigReaderFailures
 import zio.{Task, UIO, URIO}
-import zio.console.{putStr, putStrLn}
+import zio.console.{putStrLn}
 
 /**
  * https://zio.dev/docs/overview/overview_index
@@ -24,13 +24,10 @@ object Main extends zio.App {
           }.map(_ => UIO.succeed(1)).flatten,
         _ => UIO.succeed(0)
       )
-
   }
 
   /**
-   * Read config file.
-   * Start service as http server.
-   * Close application when it's finished.
+   *
   */
   private val WsApp: List[String] => AppTaskRes[Int]  = args =>
     for {
@@ -47,7 +44,7 @@ object Main extends zio.App {
         SuccessConf => {
           val dbConf = SuccessConf.dbConfig
           println(s"[2]Successful read config file. DB type = ${dbConf.dbtype} url = ${dbConf.url}")
-          application.WsServer(SuccessConf)
+          WsServer.WsServer(SuccessConf)
         }
       )
       _ <- putStrLn("[7] Web service stopping...")

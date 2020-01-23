@@ -1,21 +1,17 @@
 package application
 
-import java.util.concurrent.TimeUnit
-import enironments.env.{AppTaskRes, RunResType}
-import zio.{IO, Managed, Task, ZIO, console}
+import environments.env.{AppTaskRes}
+import zio.{IO, Managed, Task, UIO}
 import akka.actor._
 import akka.event.{Logging, LoggingAdapter}
-import akka.http.scaladsl.Http.{IncomingConnection, ServerBinding}
 import akka.http.scaladsl._
-import akka.http.scaladsl.model.HttpCharsets._
 import akka.http.scaladsl.model.MediaTypes._
 import akka.http.scaladsl.model._
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl._
 import akka.util.Timeout
 import confs.Config
 import io.circe.syntax._
-import io.circe.{Encoder, Json, Printer}
+import io.circe.{ Json, Printer}
 import zio.console.putStrLn
 import scala.concurrent.duration._
 import scala.concurrent.Future
@@ -44,7 +40,7 @@ import scala.concurrent.Future
 import scala.language.postfixOps
 */
 
-object application {
+object WsServer {
 
   private val logRequest: (LoggingAdapter,HttpRequest) => Unit = (log,req) => {
     log.info(s"================= ${req.method} REQUEST ${req.protocol.value} =============")
@@ -75,25 +71,7 @@ object application {
         } yield reqHandlerResult
         )
 
-    /*
-    import zio.blocking.effectBlocking
-        for {
-          _ <- putStrLn("[3] Call startRequestHandler from WsServer.")
-          fiber <- effectBlocking(startRequestHandler(conf,ActSys)).fork
-          _     <- fiber.interrupt
-          _ <- putStrLn("[6] End WsServer.")
-        } yield 1
-    */
   }
-
-  /*
-fiber <- startRequestHandler(conf,ActSys).forever.fork
-_ <- ZIO.sleep(zio.duration.Duration(5,TimeUnit.SECONDS))
-fiberJoin <- fiber.join
-*/
-
-
-
 
   def startRequestHandler(conf :Config, actorSystem: ActorSystem) :Task[Int] = {
     implicit val system = actorSystem
@@ -103,7 +81,7 @@ fiberJoin <- fiber.join
     log.info(s"[4]Endpoint from config file address = ${conf.api.endpoint} port = ${conf.api.port}")
     val serverSource = Http(actorSystem).bind(interface = "127.0.0.1", port = 8080)
 
-    val reqHandler: HttpRequest => Future[HttpResponse] = {
+    val reqHandler1: HttpRequest => Future[HttpResponse] = {
       case request@HttpRequest(HttpMethods.GET, Uri.Path ("/"), httpHeader, requestEntity, requestProtocol)
       => logRequest(log,request)
         Future.successful {
@@ -119,7 +97,7 @@ fiberJoin <- fiber.join
         Future.successful{HttpResponse(404, entity = "Unknown resource!")}
     }
 
-    val httpEcho = Flow[HttpRequest]
+    val reqHandler2 = Flow[HttpRequest]
       //.via(reactToConnectionFailure)
       .map { request =>
         logRequest(log,request)
@@ -128,19 +106,14 @@ fiberJoin <- fiber.join
         HttpResponse(entity = HttpEntity(ContentTypes.`text/plain(UTF-8)`, request.entity.dataBytes))
       }
 
-    /*
-    serverSource.to(Sink.foreach { connection =>
-      connection.handleWithAsyncHandler(reqHandler)
-    }).run
-    */
-
     serverSource.runForeach { connection =>
         log.info("Accepted new connection from " + connection.remoteAddress)
-        connection.handleWith(httpEcho)
+        connection.handleWith(reqHandler2)
+      // connection.handleWithAsyncHandler(reqHandler)
       }
 
     log.info("[5]Step before return Task(1) from startRequestHandler.")
-    Task(1)
+    UIO.succeed(1)
   }
 
   /*
