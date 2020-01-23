@@ -1,7 +1,7 @@
 package application
 
-import environments.env.{AppTaskRes}
-import zio.{IO, Managed, Task, UIO}
+import environments.env.AppTaskRes
+import zio.{IO, Managed, Task, UIO, ZIO}
 import akka.actor._
 import akka.event.{Logging, LoggingAdapter}
 import akka.http.scaladsl._
@@ -11,8 +11,10 @@ import akka.stream.scaladsl._
 import akka.util.Timeout
 import confs.Config
 import io.circe.syntax._
-import io.circe.{ Json, Printer}
+import io.circe.{Json, Printer}
 import zio.console.putStrLn
+import akka.http.scaladsl.model.HttpCharsets._
+
 import scala.concurrent.duration._
 import scala.concurrent.Future
 import scala.language.postfixOps
@@ -40,6 +42,9 @@ import scala.concurrent.Future
 import scala.language.postfixOps
 */
 
+
+
+
 object WsServObj {
 
   private val logRequest: (LoggingAdapter,HttpRequest) => Unit = (log,req) => {
@@ -66,7 +71,7 @@ object WsServObj {
       actorSystem =>
         for {
           _ <- putStrLn("[3]Call startRequestHandler from WsServer.")
-          reqHandlerResult <- startRequestHandler(conf, actorSystem)
+          reqHandlerResult <- startRequestHandler(conf, actorSystem).flatMap(_ => ZIO.never)
           _ <- putStrLn("[6]After startRequestHandler from WsServer.")
         } yield reqHandlerResult
     )
@@ -82,7 +87,7 @@ object WsServObj {
     val serverSource = Http(actorSystem).bind(interface = "127.0.0.1", port = 8080)
 
     val reqHandler1: HttpRequest => Future[HttpResponse] = {
-      case request@HttpRequest(HttpMethods.GET, Uri.Path ("/"), httpHeader, requestEntity, requestProtocol)
+      case request@HttpRequest(HttpMethods.GET, Uri.Path ("/test"), httpHeader, requestEntity, requestProtocol)
       => logRequest(log,request)
         Future.successful {
         val resJson: Json = s"SimpleTestString ${request.uri}".asJson
@@ -91,47 +96,29 @@ object WsServObj {
           entity = HttpEntity (`application/json`, Printer.noSpaces.print (resJson))
         )
       }
+      case request@HttpRequest(HttpMethods.GET, Uri.Path ("/plain"), httpHeader, requestEntity, requestProtocol)
+      => logRequest(log,request)
+        Future.successful {
+          val resJson: Json = s"SimpleTestString ${request.uri}".asJson
+          HttpResponse (
+            StatusCodes.OK,
+            entity = //HttpEntity(ContentTypes.`text/plain(UTF-8)`, request.entity.dataBytes
+              HttpEntity(`text/plain` withCharset `UTF-8`, "<html><body>INDEX PAGE</body></html>")
+          )
+        }
       case request: HttpRequest =>
         logRequest(log,request)
         request.discardEntityBytes() // important to drain incoming HTTP Entity stream
         Future.successful{HttpResponse(404, entity = "Unknown resource!")}
     }
 
-    val reqHandler2 = Flow[HttpRequest]
-      //.via(reactToConnectionFailure)
-      .map { request =>
-        logRequest(log,request)
-        // simple streaming (!) "echo" response:
-        // add here case request@HttpRequest(HttpMethods.GET, Uri.Path ("/"), httpHeader, requestEntity, requestProtocol)
-        HttpResponse(entity = HttpEntity(ContentTypes.`text/plain(UTF-8)`, request.entity.dataBytes))
-      }
-
     serverSource.runForeach { connection =>
         log.info("Accepted new connection from " + connection.remoteAddress)
-        connection.handleWith(reqHandler2)
-      // connection.handleWithAsyncHandler(reqHandler)
+       connection.handleWithAsyncHandler(reqHandler1)
       }
 
     log.info("[5]Step before return Task(1) from startRequestHandler.")
     UIO.succeed(())
   }
-
-  /*
-val bindingFuture: Future[Http.ServerBinding] =
-  serverSource.to(Sink.foreach { connection =>
-    connection.handleWithAsyncHandler(reqHandler)
-  }).run
-*/
-
-  /*
-  serverSource.to(Sink.foreach { connection =>
-    log.info("Accepted new connection from " + connection.remoteAddress)
-    connection.handleWithAsyncHandler(reqHandler)
-  }).run
-  .failed.foreach { ex =>
-    log.error(ex, "Failed to bind.")
-  }
-  */
-
 
 }
