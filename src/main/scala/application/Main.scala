@@ -37,6 +37,9 @@ object Main extends zio.App {
       //todo: Use config        <- ZIO.fromEither(default.load[AppConfig]).mapError(InvalidConfig)
       conf: Either[ConfigReaderFailures, Config] <-
         Configuration.config.loadFile("C:\\ws_fphp\\src\\main\\resources\\application.conf")
+      /**
+       * Configuration.config.loadFile return RIO[R, Either[ConfigReaderFailures, Config]]
+      */
       //todo: use res <- _ <- WsServObj.WsServer(config)
       res <- conf.fold(
         FailConfig => {

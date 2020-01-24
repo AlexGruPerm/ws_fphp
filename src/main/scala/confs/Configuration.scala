@@ -20,15 +20,20 @@ trait Configuration extends Serializable {
 
 object Configuration {
   trait Service[R] {
-    val load: RIO[R, Config]//todo: remove it
+    val load: String => RIO[R, Config]
     val loadFile: String => RIO[R, Either[ConfigReaderFailures, Config]]
   }
 
+  /** Task.effect
+   * * Imports a synchronous effect into a pure `ZIO` value, translating any
+   * * throwables into a `Throwable` failure in the returned value.
+  */
   val config: Service[Any] = new Service[Any] {
-    val load: Task[Config] = Task.effect(ConfigSource.default.loadOrThrow[Config]) //todo: remove it
+    val load: String => Task[Config] = confFileName =>
+      Task.effect(ConfigSource.file(new File(confFileName)).loadOrThrow[Config])
+
     val loadFile: String => Task[Either[ConfigReaderFailures, Config]] = confFileName =>
-      Task.effect(ConfigSource.file(new File(confFileName))
-        .load[Config]) //todo: replace on return type ZIO[Any,Throwable,Config] to eliminate fold in WsApp.
+      Task.effect(ConfigSource.file(new File(confFileName)).load[Config])
   }
 
 }
