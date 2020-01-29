@@ -14,10 +14,10 @@ import zio.{RIO, ZEnv, ZIO}
 object env {
 
   type AppEnvironment = ZEnv
-    //with Configuration
-    //with DbExecutor
 
-  type RunResType[A] = ZIO[ZEnv, Nothing, A]
+  type AppEnv = ZEnv
+    with Configuration
+  //with DbExecutor
 
   type AppTaskRes[A] = ZIO[AppEnvironment, Throwable, A]
 

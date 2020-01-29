@@ -67,7 +67,7 @@ object WsServObj {
     val ActSys = ActorSystem("WsDb")
     //startRequestHandler(conf,ActSys)
 
-    Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
+    val wsRes = Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
         for {
           _ <- putStrLn("[3]Call startRequestHandler from WsServer.")
@@ -76,9 +76,10 @@ object WsServObj {
         } yield reqHandlerResult
     )
 
+    wsRes
   }
 
-  def startRequestHandler(conf :Config, actorSystem: ActorSystem) :Task[Unit] = {
+  def startRequestHandler(conf :Config, actorSystem: ActorSystem) :ZIO[Any, Throwable, Unit] = {
     implicit val system = actorSystem
     implicit val timeout: Timeout = Timeout(10 seconds)
     implicit val executionContext = system.dispatcher

@@ -1,11 +1,12 @@
 package application
 
 import confs.{Config, Configuration}
-import environments.env.{AppTaskRes, RunResType}
+import environments.env.{AppEnv, AppEnvironment, AppTaskRes}
 import org.slf4j.LoggerFactory
 import pureconfig.error.ConfigReaderFailures
-import zio.{Task, UIO, URIO}
-import zio.console.{putStrLn}
+import zio.{Task, UIO, URIO, ZIO}
+import zio.ZEnv
+import zio.console.{Console, putStrLn}
 
 /**
  * https://zio.dev/docs/overview/overview_index
@@ -15,7 +16,7 @@ import zio.console.{putStrLn}
  */
 object Main extends zio.App {
 
-  def run(args: List[String]): RunResType[Int] = {
+  override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] = {
     val logger = LoggerFactory.getLogger(getClass.getName)
     logger.info("Method run of Main")
     WsApp(args).foldM(
@@ -32,15 +33,15 @@ object Main extends zio.App {
   private val WsApp: List[String] => AppTaskRes[Unit]  = args =>
     for {
       _ <- putStrLn("[1]Web service starting...")
+      /*
+      defRT <- ZIO.accessM[AppEnv](env => env.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf"))
+      _ <- putStrLn(s"env.toString = ${defRT}")
+      */
       _ <- if (args.length < 0) Task.fail(new IllegalArgumentException("Need config file as parameter."))
       else UIO.succeed(()) //If args.length correct just return succeed effect
-      //todo: Use config        <- ZIO.fromEither(default.load[AppConfig]).mapError(InvalidConfig)
-      conf: Either[ConfigReaderFailures, Config] <-
-        Configuration.config.loadFile("C:\\ws_fphp\\src\\main\\resources\\application.conf")
-      /**
-       * Configuration.config.loadFile return RIO[R, Either[ConfigReaderFailures, Config]]
-      */
-      //todo: use res <- _ <- WsServObj.WsServer(config)
+      cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
+      res <- WsServObj.WsServer(cfg)
+      /*
       res <- conf.fold(
         FailConfig => {
           println(s"Can't load config file. Error ${FailConfig.toString}")
@@ -52,6 +53,7 @@ object Main extends zio.App {
           WsServObj.WsServer(SuccessConf)
         }
       )
+      */
       _ <- putStrLn("[7] Web service stopping...")
     } yield res
 
