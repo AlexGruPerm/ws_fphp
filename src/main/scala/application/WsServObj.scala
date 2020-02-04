@@ -13,6 +13,7 @@ import confs.Config
 import io.circe.syntax._
 import io.circe.{Json, Printer}
 import zio.console.putStrLn
+import scala.io.Source
 import akka.http.scaladsl.model.HttpCharsets._
 
 import scala.concurrent.duration._
@@ -76,10 +77,10 @@ object WsServObj {
       => logRequest(log,request)
         Future.successful {
           val resJson: Json = s"SimpleTestString ${request.uri}".asJson
+          val strDebugForm :String = Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").getLines.mkString
           HttpResponse (
             StatusCodes.OK,
-            entity = //HttpEntity(ContentTypes.`text/plain(UTF-8)`, request.entity.dataBytes
-              HttpEntity(`text/plain` withCharset `UTF-8`, "<html><body>INDEX PAGE</body></html>")
+            entity = HttpEntity(`text/html` withCharset `UTF-8`,strDebugForm)
           )
         }
       case request: HttpRequest =>
