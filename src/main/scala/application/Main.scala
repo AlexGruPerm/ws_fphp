@@ -1,12 +1,10 @@
 package application
 
-import confs.{Config, Configuration}
-import environments.env.{AppEnv}
+import confs.{Configuration}
 import org.slf4j.LoggerFactory
-import pureconfig.error.ConfigReaderFailures
 import zio.{Task, UIO, URIO, ZIO}
 import zio.ZEnv
-import zio.console.{Console, putStrLn}
+import zio.console.{putStrLn}
 
 /**
  * https://zio.dev/docs/overview/overview_index
@@ -37,13 +35,7 @@ object Main extends zio.App {
     for {
       _ <- putStrLn("[1]Web service starting...")
       _ <- checkArgs(args)
-
-      /*
-      confEnv <- ZIO.access[Configuration](env => env.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf"))//ZIO.environment[AppEnv]
-      cfg <- confEnv
-      */
       cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
-
       res <- WsServObj.WsServer(cfg)
       _ <- putStrLn("[7] Web service stopping...")
     } yield res
