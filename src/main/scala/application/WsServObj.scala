@@ -1,7 +1,7 @@
 package application
 
-import environments.env.AppTaskRes
-import zio.{IO, Managed, Task, UIO, ZIO}
+import zio.{Managed, Task, UIO, ZIO}
+import zio.{ZEnv}
 import akka.actor._
 import akka.event.{Logging, LoggingAdapter}
 import akka.http.scaladsl._
@@ -63,7 +63,7 @@ object WsServObj {
    * https://medium.com/@ghostdogpr/combining-zio-and-akka-to-enable-distributed-fp-in-scala-61ffb81e3283
    *
    */
-  val WsServer: Config => AppTaskRes[Unit] = conf => {
+  val WsServer: Config => ZIO[ZEnv, Throwable, Unit] = conf => {
     val ActSys = ActorSystem("WsDb")
     //startRequestHandler(conf,ActSys)
 

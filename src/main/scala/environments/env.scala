@@ -1,9 +1,7 @@
 package environments
 
-//import conf.Configuration
 import confs.Configuration
-import db.DbExecutor
-import zio.{RIO, ZEnv, ZIO}
+import zio.{ZEnv}
 
 /**
  * Type aliases: https://zio.dev/docs/overview/overview_index
@@ -12,13 +10,5 @@ import zio.{RIO, ZEnv, ZIO}
  * and may fail with a Throwable value, or succeed with an A.
  */
 object env {
-
-  type AppEnvironment = ZEnv
-
-  type AppEnv = ZEnv
-    with Configuration
-  //with DbExecutor
-
-  type AppTaskRes[A] = ZIO[AppEnvironment, Throwable, A]
-
+  type AppEnv = ZEnv with Configuration
 }

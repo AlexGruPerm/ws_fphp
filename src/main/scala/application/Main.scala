@@ -1,7 +1,7 @@
 package application
 
 import confs.{Config, Configuration}
-import environments.env.{AppEnv, AppEnvironment, AppTaskRes}
+import environments.env.{AppEnv}
 import org.slf4j.LoggerFactory
 import pureconfig.error.ConfigReaderFailures
 import zio.{Task, UIO, URIO, ZIO}
@@ -30,9 +30,10 @@ object Main extends zio.App {
   /**
    *
   */
-  private val WsApp: List[String] => AppTaskRes[Unit]  = args =>
+  private val WsApp: List[String] => ZIO[ZEnv, Throwable, Unit]  = args =>
     for {
       _ <- putStrLn("[1]Web service starting...")
+      //confEnv  <- ZIO.environment[Configuration]
       /*
       defRT <- ZIO.accessM[AppEnv](env => env.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf"))
       _ <- putStrLn(s"env.toString = ${defRT}")
@@ -41,20 +42,8 @@ object Main extends zio.App {
       else UIO.succeed(()) //If args.length correct just return succeed effect
       cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
       res <- WsServObj.WsServer(cfg)
-      /*
-      res <- conf.fold(
-        FailConfig => {
-          println(s"Can't load config file. Error ${FailConfig.toString}")
-          UIO.succeed(0)
-        },
-        SuccessConf => {
-          val dbConf = SuccessConf.dbConfig
-          println(s"[2]Successful read config file. DB type = ${dbConf.dbtype} url = ${dbConf.url}")
-          WsServObj.WsServer(SuccessConf)
-        }
-      )
-      */
       _ <- putStrLn("[7] Web service stopping...")
     } yield res
 
 }
+
