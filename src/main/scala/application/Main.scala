@@ -27,20 +27,23 @@ object Main extends zio.App {
       )
   }
 
-  /**
-   *
-  */
+  private val checkArgs : List[String] => Task[Unit] = args => for {
+    checkRes <- if (args.length < 0) Task.fail(new IllegalArgumentException("Need config file as parameter."))
+    else UIO.succeed(())
+  } yield checkRes
+
+
   private val WsApp: List[String] => ZIO[ZEnv, Throwable, Unit]  = args =>
     for {
       _ <- putStrLn("[1]Web service starting...")
-      //confEnv  <- ZIO.environment[Configuration]
+      _ <- checkArgs(args)
+
       /*
-      defRT <- ZIO.accessM[AppEnv](env => env.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf"))
-      _ <- putStrLn(s"env.toString = ${defRT}")
+      confEnv <- ZIO.access[Configuration](env => env.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf"))//ZIO.environment[AppEnv]
+      cfg <- confEnv
       */
-      _ <- if (args.length < 0) Task.fail(new IllegalArgumentException("Need config file as parameter."))
-      else UIO.succeed(()) //If args.length correct just return succeed effect
       cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
+
       res <- WsServObj.WsServer(cfg)
       _ <- putStrLn("[7] Web service stopping...")
     } yield res
