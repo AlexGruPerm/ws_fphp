@@ -19,31 +19,6 @@ import scala.concurrent.duration._
 import scala.concurrent.Future
 import scala.language.postfixOps
 
-/*
-import java.util.concurrent.TimeUnit
-import enironments.env.{AppTaskRes, RunResType}
-import zio.{IO, Managed, Task, ZIO, console}
-import akka.actor._
-import akka.event.{Logging, LoggingAdapter}
-import akka.http.scaladsl.Http.{IncomingConnection, ServerBinding}
-import akka.http.scaladsl._
-import akka.http.scaladsl.model.HttpCharsets._
-import akka.http.scaladsl.model.MediaTypes._
-import akka.http.scaladsl.model._
-import akka.stream.ActorMaterializer
-import akka.stream.scaladsl._
-import akka.util.Timeout
-import confs.Config
-import io.circe.syntax._
-import io.circe.{Encoder, Json, Printer}
-import zio.console.putStrLn
-import scala.concurrent.duration._
-import scala.concurrent.Future
-import scala.language.postfixOps
-*/
-
-
-
 
 object WsServObj {
 
@@ -97,7 +72,7 @@ object WsServObj {
           entity = HttpEntity (`application/json`, Printer.noSpaces.print (resJson))
         )
       }
-      case request@HttpRequest(HttpMethods.GET, Uri.Path ("/plain"), httpHeader, requestEntity, requestProtocol)
+      case request@HttpRequest(HttpMethods.GET, Uri.Path ("/debug"), httpHeader, requestEntity, requestProtocol)
       => logRequest(log,request)
         Future.successful {
           val resJson: Json = s"SimpleTestString ${request.uri}".asJson

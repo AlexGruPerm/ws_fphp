@@ -1,10 +1,10 @@
 package application
 
-import confs.{Configuration}
+import confs.Configuration
 import org.slf4j.LoggerFactory
 import zio.{Task, UIO, URIO, ZIO}
 import zio.ZEnv
-import zio.console.{putStrLn}
+import zio.console.putStrLn
 
 /**
  * https://zio.dev/docs/overview/overview_index
@@ -30,10 +30,9 @@ object Main extends zio.App {
     else UIO.succeed(())
   } yield checkRes
 
-
   private val WsApp: List[String] => ZIO[ZEnv, Throwable, Unit]  = args =>
     for {
-      _ <- putStrLn("[1]Web service starting...")
+      _ <- putStrLn("[1] Web service starting...")
       _ <- checkArgs(args)
       cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
       res <- WsServObj.WsServer(cfg)
