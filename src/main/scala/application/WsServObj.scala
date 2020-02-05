@@ -33,6 +33,32 @@ object WsServObj {
     log.info("========================================================")
   }
 
+  private val reqJsonText =
+    """
+      |              {  "dicts": [
+      |                {
+      |                  "proc":"prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"
+      |                },
+      |                  {
+      |                    "proc":"prm_salary.pkg_web_cons_rep_grbs_list(refcur => ?, p_user_id => 45224506)"
+      |                  },
+      |                {
+      |                  "proc":"prm_salary.pkg_web_cons_rep_institution_list(refcur => ?, p_user_id => 45224506)"
+      |                },
+      |                {
+      |                  "proc":"prm_salary.pkg_web_cons_rep_form_type_list(refcur => ?)"
+      |                },
+      |                {
+      |                  "proc":"prm_salary.pkg_web_cons_rep_territory_list(refcur => ?)"
+      |                },
+      |                {
+      |                  "proc":"prm_salary.pkg_web_cons_rep_okved_list(refcur => ?)"
+      |                }
+      |              ]
+      |             }
+      |""".stripMargin
+
+
   /**
    * Read config file and open Http server.
    * Example :
@@ -77,7 +103,9 @@ object WsServObj {
       => logRequest(log,request)
         Future.successful {
           val resJson: Json = s"SimpleTestString ${request.uri}".asJson
-          val strDebugForm :String = Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").getLines.mkString
+          val strDebugForm :String = Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").getLines
+            .mkString
+              .replace("req_json_text",reqJsonText)
           HttpResponse (
             StatusCodes.OK,
             entity = HttpEntity(`text/html` withCharset `UTF-8`,strDebugForm)

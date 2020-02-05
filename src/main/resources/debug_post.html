@@ -23,11 +23,11 @@
 
             function funcOnClickSendRequestButton() {
               console.log("Send request");
-                var postRqDataJson = document.getElementById("rq-json");
+                var postRqDataJson = document.getElementById("rq-json").innerHTML;
                 console.log(postRqDataJson);
-                postAjax('/test', postRqDataJson, function(data){
-                  document.getElementById("rs-json").innerHTML = data;
-                });
+                    postAjax('/test', postRqDataJson, function(data){
+                      document.getElementById("rs-json").innerHTML = data;
+                    });
               }
   </script>
 </head>
@@ -35,34 +35,16 @@
 <table border="1" width="60%" height=300px cellspacing="0" cellpadding="0">
     <th>
     <td width="50%">
-            <pre id="rq-json" width="200px">
-              {  "items": [
-                {
-                  "proc":"prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"
-                },
-                  {
-                    "proc":"prm_salary.pkg_web_cons_rep_grbs_list(refcur => ?, p_user_id => 45224506)"
-                  },
-                {
-                  "proc":"prm_salary.pkg_web_cons_rep_institution_list(refcur => ?, p_user_id => 45224506)"
-                },
-                {
-                  "proc":"prm_salary.pkg_web_cons_rep_form_type_list(refcur => ?)"
-                },
-                {
-                  "proc":"prm_salary.pkg_web_cons_rep_territory_list(refcur => ?)"
-                },
-                {
-                  "proc":"prm_salary.pkg_web_cons_rep_okved_list(refcur => ?)"
-                }
-              ]
-             }
-             </pre>
+    <div contenteditable="true">
+        <pre id="rq-json">
+            req_json_text
+        </pre>
+    </div>
     </td>
     <td width="50%">
-         <pre id="rs-json">
-          ws response here
-         </pre>
+        <pre id="rs-json">
+            ws response here
+        </pre>
     </td>
     </th>
 </table></br>
