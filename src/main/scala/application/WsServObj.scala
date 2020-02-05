@@ -1,7 +1,6 @@
 package application
 
-import zio.{Managed, Task, UIO, ZIO}
-import zio.{ZEnv}
+import zio.{Managed, Schedule, Task, UIO, ZEnv, ZIO}
 import akka.actor._
 import akka.event.{Logging, LoggingAdapter}
 import akka.http.scaladsl._
@@ -15,8 +14,6 @@ import io.circe.{Json, Printer}
 import zio.console.putStrLn
 import scala.io.Source
 import akka.http.scaladsl.model.HttpCharsets._
-
-import scala.concurrent.duration._
 import scala.concurrent.Future
 import scala.language.postfixOps
 
@@ -68,21 +65,28 @@ object WsServObj {
   val WsServer: Config => ZIO[ZEnv, Throwable, Unit] = conf => {
     val ActSys = ActorSystem("WsDb")
     //startRequestHandler(conf,ActSys)
+    import zio.blocking.effectBlocking
+    import zio.duration._
 
     val wsRes = Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
         for {
           _ <- putStrLn("[3]Call startRequestHandler from WsServer.")
-          reqHandlerResult <- startRequestHandler(conf, actorSystem).flatMap(_ => ZIO.never)
-          _ <- putStrLn("[6]After startRequestHandler from WsServer.")
-        } yield reqHandlerResult
+          //reqHandlerResult <- startRequestHandler(conf, actorSystem).flatMap(_ => ZIO.never)
+          fiber <- effectBlocking(startRequestHandler(conf, actorSystem)).fork
+          _  <- fiber.join
+          _  <- UIO.succeed(()).repeat(Schedule.spaced(1.second)) // here we can execute effect that manage ws cache
+          _  <- putStrLn("[6]After startRequestHandler from WsServer.")
+        } yield ()//reqHandlerResult
     )
 
     wsRes
   }
 
+
   def startRequestHandler(conf :Config, actorSystem: ActorSystem) :ZIO[Any, Throwable, Unit] = {
     implicit val system = actorSystem
+    import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
     implicit val executionContext = system.dispatcher
     val log = Logging(system,"WsDb")
