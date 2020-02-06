@@ -87,7 +87,7 @@ object WsServObj {
       actorSystem =>
         for {
           _ <- putStrLn("[3]Call startRequestHandler from WsServer.")
-          fiber <- effectBlocking(startRequestHandler(conf, actorSystem)).fork
+          fiber <- effectBlocking(startRequestHandler(conf, actorSystem)).fork //with this way we can buildup more akka-http servers.
           _  <- fiber.join
           _  <- cacheChecker.repeat(Schedule.spaced(5.second))
           _  <- putStrLn("[6]After startRequestHandler from WsServer.")

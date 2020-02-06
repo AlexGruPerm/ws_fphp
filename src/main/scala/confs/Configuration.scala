@@ -16,9 +16,8 @@ final case class DbConfig(dbtype: String,
                           driver: String,
                           url: String,
                           numThreads: Int,
-                          user: String,
+                          username: String,
                           password: String)
-
 
 trait Configuration extends Serializable {
   val config: Configuration.Service[Any]

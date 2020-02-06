@@ -3,7 +3,7 @@ package dbconn
 import java.sql.{Connection, DriverManager, ResultSet, Statement}
 import java.util.Properties
 
-import dbconn.{PgConnectProp, PgSettings}
+import confs.DbConfig
 import org.slf4j.LoggerFactory
 import zio.Task
 
@@ -42,7 +42,7 @@ trait jdbcSession {
   /**
    * Return Connection to Postgres or Exception
   */
-  def createPgSess: (Int, PgConnectProp) => Task[pgSess] = (iterNum, cp) =>
+  def createPgSess: (Int, DbConfig) => Task[pgSess] = (iterNum, cp) =>
     Task {
       //Class.forName(cp.driver)
 
@@ -87,10 +87,10 @@ trait jdbcSession {
 class PgConnection extends jdbcSession {
 
   //todo: read PgConnectProp properties single time from input json.
-  val sess : (Int,PgConnectProp) => Task[pgSess] = (iterNum,conProp) =>
+  val sess : (Int,DbConfig) => Task[pgSess] = (iterNum,conProp) =>
     createPgSess(iterNum,conProp)
 
-  val getMaxConns : PgConnectProp => Task[PgSettings] = conProp =>
+  val getMaxConns : DbConfig => Task[PgSettings] = conProp =>
   for {
     pgSes :pgSess <- sess(0,conProp)
     maxConn <- Task{

@@ -1,6 +1,6 @@
 package dbconn
 
-import dbconn.{PgConnectProp, PgSettings}
+import confs.DbConfig
 import zio.{Task, ZIO}
 import zio.console.{Console, putStrLn}
 
@@ -9,7 +9,7 @@ object CommonDbCheck {
   /**
    *  Check that connect credentials are valid.
    */
-  val checkDbConnectCredits : Task[PgConnectProp] => ZIO[Console, Throwable, Unit] = TdbConProps =>
+  val checkDbConnectCredits : Task[DbConfig] => ZIO[Console, Throwable, Unit] = TdbConProps =>
     for {
       dbConProps <- TdbConProps
       pgSes: pgSess <- (new PgConnection).sess(0,dbConProps)
@@ -19,7 +19,7 @@ object CommonDbCheck {
   /**
    *  Get max_connections from pg config
    */
-  val checkDbMaxConnections : Task[PgConnectProp] => ZIO[Console, Throwable, Unit] = TdbConProps =>
+  val checkDbMaxConnections : Task[DbConfig] => ZIO[Console, Throwable, Unit] = TdbConProps =>
     for {
       dbConProps <- TdbConProps
       settings :PgSettings <- (new PgConnection).getMaxConns(dbConProps)
