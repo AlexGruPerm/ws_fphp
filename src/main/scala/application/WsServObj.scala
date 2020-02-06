@@ -55,7 +55,11 @@ object WsServObj {
       |             }
       |""".stripMargin
 
+  //ex of using Ref for cache. https://stackoverflow.com/questions/57252919/scala-zio-ref-datatype
 
+  /**
+   *
+  */
   val cacheChecker :ZIO[ZEnv,Nothing,Unit] = for {
     _ <- putStrLn("cacheChecker")
   } yield ()
