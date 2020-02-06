@@ -56,6 +56,10 @@ object WsServObj {
       |""".stripMargin
 
 
+  val cacheChecker :ZIO[ZEnv,Nothing,Unit] = for {
+    _ <- putStrLn("cacheChecker")
+  } yield ()
+
   /**
    * Read config file and open Http server.
    * Example :
@@ -64,24 +68,36 @@ object WsServObj {
    */
   val WsServer: Config => ZIO[ZEnv, Throwable, Unit] = conf => {
     val ActSys = ActorSystem("WsDb")
-    //startRequestHandler(conf,ActSys)
     import zio.blocking.effectBlocking
     import zio.duration._
 
+    /**
+     * .fork
+     * Returns an effect that forks this effect into its own separate fiber,
+     * returning the fiber immediately, without waiting for it to compute its
+     * value.
+     * .join
+     * Joins the fiber, which suspends the joining fiber until the result of the fiber has been determined.
+     */
     val wsRes = Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
         for {
           _ <- putStrLn("[3]Call startRequestHandler from WsServer.")
-          //reqHandlerResult <- startRequestHandler(conf, actorSystem).flatMap(_ => ZIO.never)
           fiber <- effectBlocking(startRequestHandler(conf, actorSystem)).fork
           _  <- fiber.join
-          _  <- UIO.succeed(()).repeat(Schedule.spaced(1.second)) // here we can execute effect that manage ws cache
+          _  <- cacheChecker.repeat(Schedule.spaced(5.second))
           _  <- putStrLn("[6]After startRequestHandler from WsServer.")
-        } yield ()//reqHandlerResult
+        } yield ()
     )
+    /** examples:
+     *   reqHandlerResult <- startRequestHandler(conf, actorSystem).flatMap(_ => ZIO.never)
+     *             //_  <- UIO.succeed(()).repeat(Schedule.spaced(1.second))
+    */
 
     wsRes
   }
+
+
 
 
   def startRequestHandler(conf :Config, actorSystem: ActorSystem) :ZIO[Any, Throwable, Unit] = {
