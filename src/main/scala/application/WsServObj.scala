@@ -69,7 +69,7 @@ object WsServObj {
     for {
       currValue <- cache.get
       _ <- putStrLn(s"cacheChecker state = $currValue")
-      //_ <- cache.update(_ + 1)
+      _ <- cache.update(_ + 1)
   } yield ()
 
   /**
@@ -123,7 +123,6 @@ object WsServObj {
     val serverSource = Http(actorSystem).bind(interface = "127.0.0.1", port = 8080)
 
     val reqHandler1: HttpRequest => Future[HttpResponse] = {
-
       case request@HttpRequest(HttpMethods.POST, Uri.Path ("/test"), httpHeader, requestEntity, requestProtocol)
       => logRequest(log,request)
         Future.successful {
