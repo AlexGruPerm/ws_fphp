@@ -1,6 +1,6 @@
 package application
 
-import zio.{Managed, Schedule, Task, UIO, ZEnv, ZIO}
+import zio.{Managed, Ref, Schedule, Task, UIO, ZEnv, ZIO}
 import akka.actor._
 import akka.event.{Logging, LoggingAdapter}
 import akka.http.scaladsl._
@@ -12,8 +12,10 @@ import confs.Config
 import io.circe.syntax._
 import io.circe.{Json, Printer}
 import zio.console.putStrLn
+
 import scala.io.Source
 import akka.http.scaladsl.model.HttpCharsets._
+
 import scala.concurrent.Future
 import scala.language.postfixOps
 
@@ -57,11 +59,17 @@ object WsServObj {
 
   //ex of using Ref for cache. https://stackoverflow.com/questions/57252919/scala-zio-ref-datatype
 
+
+ // val cache :UIO[Ref[Int]] = Ref.make(0)
+
   /**
    *
   */
-  val cacheChecker :ZIO[ZEnv,Nothing,Unit] = for {
-    _ <- putStrLn("cacheChecker")
+  val cacheChecker :Ref[Int] => ZIO[ZEnv,Nothing,Unit] = cache =>
+    for {
+      currValue <- cache.get
+      _ <- putStrLn(s"cacheChecker state = $currValue")
+      //_ <- cache.update(_ + 1)
   } yield ()
 
   /**
@@ -86,10 +94,11 @@ object WsServObj {
     val wsRes = Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
         for {
+          cache <- Ref.make(0)
           _ <- putStrLn("[3]Call startRequestHandler from WsServer.")
-          fiber <- effectBlocking(startRequestHandler(conf, actorSystem)).fork //with this way we can buildup more akka-http servers.
+          fiber <- effectBlocking(startRequestHandler(cache, conf, actorSystem)).fork //with this way we can buildup more akka-http servers.
           _  <- fiber.join
-          _  <- cacheChecker.repeat(Schedule.spaced(5.second))
+          _  <- cacheChecker(cache).repeat(Schedule.spaced(2.second))
           _  <- putStrLn("[6]After startRequestHandler from WsServer.")
         } yield ()
     )
@@ -104,7 +113,7 @@ object WsServObj {
 
 
 
-  def startRequestHandler(conf :Config, actorSystem: ActorSystem) :ZIO[Any, Throwable, Unit] = {
+  def startRequestHandler(cache :Ref[Int], conf :Config, actorSystem: ActorSystem) :ZIO[Any, Throwable, Unit] = {
     implicit val system = actorSystem
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
@@ -114,6 +123,7 @@ object WsServObj {
     val serverSource = Http(actorSystem).bind(interface = "127.0.0.1", port = 8080)
 
     val reqHandler1: HttpRequest => Future[HttpResponse] = {
+
       case request@HttpRequest(HttpMethods.POST, Uri.Path ("/test"), httpHeader, requestEntity, requestProtocol)
       => logRequest(log,request)
         Future.successful {

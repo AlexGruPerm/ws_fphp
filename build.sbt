@@ -11,6 +11,7 @@ lazy val Versions = new {
   val logbackVers = "1.2.3"
   val pgVers = "42.2.5"
   val zioVers = "1.0.0-RC17"
+  val zioLog = "0.2.0"
   val dbcp2Vers = "2.7.0"
   val jschVers = "0.1.55"
   val zioPureConf = "0.12.2"
@@ -30,6 +31,7 @@ libraryDependencies ++= Seq(
   "com.typesafe" % "config" % Versions.typeSefeConf,
   "org.postgresql" % "postgresql" % Versions.pgVers,
   "dev.zio" %% "zio" % Versions.zioVers,
+  "dev.zio" %% "zio-logging" % Versions.zioLog,
   "com.github.pureconfig" %% "pureconfig" % Versions.zioPureConf,
   "org.apache.commons" % "commons-dbcp2" % Versions.dbcp2Vers
 )
