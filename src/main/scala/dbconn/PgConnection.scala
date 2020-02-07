@@ -44,31 +44,9 @@ trait jdbcSession {
   */
   def createPgSess: (Int, DbConfig) => Task[pgSess] = (iterNum, cp) =>
     Task {
-      //Class.forName(cp.driver)
-
-      val url :String = cp.url
       val props = new Properties()
       props.setProperty("user",cp.username)
       props.setProperty("password",cp.password)
-
-      //val c :Connection = DriverManager.getConnection(url, props)
-      //-----------------------------------------------------------------------------------
-      /*
-      import com.jcraft.jsch.JSch
-      val config = new java.util.Properties()
-      config.put("StrictHostKeyChecking", "no")
-      val session :com.jcraft.jsch.Session =(new JSch()).getSession("contractor", "212.33.224.13", 22008)
-      session.setPassword("4rgpiqmsx13f")
-      session.setConfig(config)
-      session.connect()
-      session.setPortForwardingL(6786, "172.17.100.53", 5432)
-
-      //Class.forName(cp.driver)
-      Class.forName(cp.driver).newInstance()
-      props.setProperty("loglevel", "2")
-      val c :Connection = DriverManager.getConnection("jdbc:postgresql://PRM-WS-0006.MOON.LAN:6786/db_ris_mkrpk", props)
-      */
-      //-----------------------------------------------------------------------------------
       val c :Connection = DriverManager.getConnection(cp.url, props)
       c.setClientInfo("ApplicationName",s"PgResearch-$iterNum")
       val stmt: Statement = c.createStatement
@@ -83,6 +61,7 @@ trait jdbcSession {
 
 /**
  *  Singleton object that keep db connection.
+ *  ??? each connection-session has an object.
 */
 class PgConnection extends jdbcSession {
 
