@@ -162,7 +162,7 @@ object WsServObj {
 
       //-----------------------------
       currValue <- cache.get
-      _ <- putStrLn(s"startRequestHandler state = $currValue")
+      _ <- putStrLn(s"startRequestHandler STATE = $currValue")
       _ <- cache.update(_ + 10)
       //-----------------------------
 
