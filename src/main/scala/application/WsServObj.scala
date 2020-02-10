@@ -1,28 +1,26 @@
 package application
 
-import zio.{Managed, Ref, Schedule, Task, UIO, ZEnv, ZIO}
-import akka.actor._
+import akka.Done
+import zio.{Managed, Ref, Schedule, Task, ZEnv, ZIO}
+import akka.actor.{ActorSystem, _}
 import akka.event.{Logging, LoggingAdapter}
+import akka.http.scaladsl.Http.ServerBinding
 import akka.http.scaladsl._
 import akka.http.scaladsl.model.MediaTypes._
-import akka.http.scaladsl.model._
-import akka.stream.scaladsl._
+import akka.http.scaladsl.model.{HttpRequest, _}
 import akka.util.Timeout
 import confs.Config
 import io.circe.syntax._
 import io.circe.{Json, Printer}
 import zio.console.putStrLn
-
-import scala.io.Source
 import akka.http.scaladsl.model.HttpCharsets._
-
 import scala.concurrent.Future
 import scala.language.postfixOps
 
 
 object WsServObj {
 
-  private val logRequest: (LoggingAdapter,HttpRequest) => Unit = (log,req) => {
+  private val logRequest: (LoggingAdapter, HttpRequest) => Unit = (log, req) => {
     log.info(s"================= ${req.method} REQUEST ${req.protocol.value} =============")
     log.info(s"uri : ${req.uri} ")
     log.info("  ---------- HEADER ---------")
@@ -59,18 +57,16 @@ object WsServObj {
 
   //ex of using Ref for cache. https://stackoverflow.com/questions/57252919/scala-zio-ref-datatype
 
-
- // val cache :UIO[Ref[Int]] = Ref.make(0)
-
   /**
    *
-  */
-  val cacheChecker :Ref[Int] => ZIO[ZEnv,Nothing,Unit] = cache =>
+   */
+  val cacheChecker: Ref[Int] => ZIO[ZEnv, Nothing, Unit] = cache =>
     for {
       currValue <- cache.get
       _ <- putStrLn(s"cacheChecker state = $currValue")
       _ <- cache.update(_ + 1)
-  } yield ()
+    } yield ()
+
 
   /**
    * Read config file and open Http server.
@@ -79,10 +75,8 @@ object WsServObj {
    *
    */
   val WsServer: Config => ZIO[ZEnv, Throwable, Unit] = conf => {
-    val ActSys = ActorSystem("WsDb")
-    import zio.blocking.effectBlocking
+    //val ActSys = ActorSystem("WsDb")
     import zio.duration._
-
     /**
      * .fork
      * Returns an effect that forks this effect into its own separate fiber,
@@ -96,68 +90,85 @@ object WsServObj {
         for {
           cache <- Ref.make(0)
           _ <- putStrLn("[3]Call startRequestHandler from WsServer.")
-          fiber <- effectBlocking(startRequestHandler(cache, conf, actorSystem)).fork //with this way we can buildup more akka-http servers.
-          _  <- fiber.join
-          _  <- cacheChecker(cache).repeat(Schedule.spaced(2.second))
-          _  <- putStrLn("[6]After startRequestHandler from WsServer.")
+          fiber <- startRequestHandler(cache, conf, actorSystem).fork
+          _ <- fiber.join
+          _ <- cacheChecker(cache).repeat(Schedule.spaced(2.second))
+          _ <- putStrLn("[6]After startRequestHandler from WsServer.")
         } yield ()
     )
     /** examples:
-     *   reqHandlerResult <- startRequestHandler(conf, actorSystem).flatMap(_ => ZIO.never)
-     *             //_  <- UIO.succeed(()).repeat(Schedule.spaced(1.second))
-    */
-
+     * reqHandlerResult <- startRequestHandler(conf, actorSystem).flatMap(_ => ZIO.never)
+     * //_  <- UIO.succeed(()).repeat(Schedule.spaced(1.second))
+     */
     wsRes
   }
 
+  val serverSource: ActorSystem => ZIO[Any, Throwable, akka.stream.scaladsl.Source[Http.IncomingConnection, Future[ServerBinding]]] = actorSystem => Task(
+    Http(actorSystem).bind(interface = "127.0.0.1", port = 8080)
+  )
 
+  import scala.io.Source
 
-
-  def startRequestHandler(cache :Ref[Int], conf :Config, actorSystem: ActorSystem) :ZIO[Any, Throwable, Unit] = {
+  def reqHandlerM(actorSystem :ActorSystem, cache :Ref[Int])(request :HttpRequest) :Future[HttpResponse] = {
+  //val reqHandlerM: (ActorSystem, HttpRequest) => Future[HttpResponse] =  (actorSystem, request) => {
     implicit val system = actorSystem
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
     implicit val executionContext = system.dispatcher
     val log = Logging(system,"WsDb")
-    log.info(s"[4]Endpoint from config file address = ${conf.api.endpoint} port = ${conf.api.port}")
-    val serverSource = Http(actorSystem).bind(interface = "127.0.0.1", port = 8080)
 
-    val reqHandler1: HttpRequest => Future[HttpResponse] = {
-      case request@HttpRequest(HttpMethods.POST, Uri.Path ("/test"), httpHeader, requestEntity, requestProtocol)
-      => logRequest(log,request)
-        Future.successful {
-        val resJson: Json = s"SimpleTestString ${request.uri}".asJson
-        HttpResponse (
-          StatusCodes.OK,
-          entity = HttpEntity (`application/json`, Printer.noSpaces.print (resJson))
-        )
-      }
-      case request@HttpRequest(HttpMethods.GET, Uri.Path ("/debug"), httpHeader, requestEntity, requestProtocol)
-      => logRequest(log,request)
-        log.info(httpHeader.mkString(";"))
+    request match {
+      case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), httpHeader, requestEntity, requestProtocol)
+      => logRequest(log, request)
         Future.successful {
           val resJson: Json = s"SimpleTestString ${request.uri}".asJson
-          val strDebugForm :String = Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").getLines
-            .mkString
-              .replace("req_json_text",reqJsonText)
-          HttpResponse (
+          HttpResponse(
             StatusCodes.OK,
-            entity = HttpEntity(`text/html` withCharset `UTF-8`,strDebugForm)
+            entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson))
+          )
+        }
+      case request@HttpRequest(HttpMethods.GET, Uri.Path("/debug"), httpHeader, requestEntity, requestProtocol)
+      => logRequest(log, request)
+        log.info(httpHeader.mkString(";"))
+        Future.successful {
+          //val resJson: Json = s"SimpleTestString ${request.uri}".asJson
+          val strDebugForm: String = Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").getLines
+            .mkString
+            .replace("req_json_text", reqJsonText)
+          HttpResponse(
+            StatusCodes.OK,
+            entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)
           )
         }
       case request: HttpRequest =>
-        logRequest(log,request)
-        request.discardEntityBytes() // important to drain incoming HTTP Entity stream
-        Future.successful{HttpResponse(404, entity = "Unknown resource!")}
+        logRequest(log, request)
+        request.discardEntityBytes()
+        Future.successful {
+          HttpResponse(404, entity = "Unknown resource!")
+        }
     }
+  }
 
-    serverSource.runForeach { connection =>
-        log.info("Accepted new connection from " + connection.remoteAddress)
-       connection.handleWithAsyncHandler(req => reqHandler1(req))
+
+  val startRequestHandler: (Ref[Int], Config, ActorSystem) => ZIO[ZEnv, Throwable, Future[Done]] = (cache, conf, actorSystem) => {
+    implicit val system = actorSystem
+    import scala.concurrent.duration._
+    implicit val timeout: Timeout = Timeout(10 seconds)
+    implicit val executionContext = system.dispatcher
+    for {
+      serverSource <- serverSource(actorSystem)
+      //-----------------------------
+      currValue <- cache.get
+      _ <- putStrLn(s"startRequestHandler state = $currValue")
+      _ <- cache.update(_ + 10)
+      //-----------------------------
+      rh = reqHandlerM(actorSystem,cache) _
+      srvReqHdlr <- Task {
+        serverSource.runForeach{conn => conn.handleWithAsyncHandler(req => rh(req)) //handler: HttpRequest => Future[HttpResponse]
+        }
       }
+    } yield srvReqHdlr
 
-    log.info("[5]Step before return Task(1) from startRequestHandler.")
-    UIO.succeed(())
   }
 
 }
