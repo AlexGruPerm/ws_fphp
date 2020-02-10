@@ -35,7 +35,7 @@ object Main extends zio.App {
       _ <- putStrLn("[1] Web service starting...")
       _ <- checkArgs(args)
       cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
-      res <- WsServObj.WsServer(cfg)
+      res <- WsServObjF.WsServer(cfg)
       _ <- putStrLn("[7] Web service stopping...")
     } yield res
 
