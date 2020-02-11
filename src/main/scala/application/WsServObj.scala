@@ -1,10 +1,10 @@
 package application
 
 import akka.Done
-import zio.{Managed, Ref, Schedule, Task, ZEnv, ZIO}
+import zio.{DefaultRuntime, Managed, Ref, Schedule, Task, UIO, ZEnv, ZIO}
 import akka.actor.{ActorSystem, _}
 import akka.event.{Logging, LoggingAdapter}
-import akka.http.scaladsl.Http.ServerBinding
+import akka.http.scaladsl.Http.{IncomingConnection, ServerBinding}
 import akka.http.scaladsl._
 import akka.http.scaladsl.model.MediaTypes._
 import akka.http.scaladsl.model.{HttpRequest, _}
@@ -14,6 +14,7 @@ import io.circe.syntax._
 import io.circe.{Json, Printer}
 import zio.console.putStrLn
 import akka.http.scaladsl.model.HttpCharsets._
+
 import scala.concurrent.Future
 import scala.language.postfixOps
 
@@ -110,7 +111,7 @@ object WsServObj {
   import scala.io.Source
 
   def reqHandlerM(actorSystem :ActorSystem, cache :Ref[Int])(request :HttpRequest) :Future[HttpResponse] = {
-  //val reqHandlerM: (Ref[Int], ActorSystem, HttpRequest) => Future[HttpResponse] =  (cache, actorSystem, request) => {
+  //val reqHandlerM: (Ref[Int], ActorSystem, HttpRequest) => Future[HttpResponse] = (cache, actorSystem, request) => {
     implicit val system = actorSystem
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
@@ -120,6 +121,12 @@ object WsServObj {
     request match {
       case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), httpHeader, requestEntity, requestProtocol)
       => {
+        /*
+        val currCacheValUIO :UIO[Int] = cache.get
+        val runtime = new DefaultRuntime {}
+        val currCacheVal :Int = runtime.unsafeRun(currCacheValUIO)
+        log.info(s"xxxxxxxxxx currCacheVal = $currCacheVal")
+        */
         logRequest(log, request)
         Future.successful {
           val resJson: Json = s"SimpleTestString ${request.uri}".asJson
@@ -151,32 +158,34 @@ object WsServObj {
   }
 
 
+  /**
+   * 1) runForeach(f: Out => Unit): Future[Done] - is a method of class "Source"
+   *
+   * 2)
+   * handleWithAsyncHandler - is a method of class "IncomingConnection"
+   * and it wait input parameter:
+   * (handler: HttpRequest => Future[HttpResponse])
+   *
+   */
   val startRequestHandler: (Ref[Int], Config, ActorSystem) => ZIO[ZEnv, Throwable, Future[Done]] = (cache, conf, actorSystem) => {
     implicit val system = actorSystem
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
     implicit val executionContext = system.dispatcher
-
     for {
       serverSource <- serverSource(actorSystem)
-
-      //-----------------------------
       currValue <- cache.get
       _ <- putStrLn(s"startRequestHandler STATE = $currValue")
       _ <- cache.update(_ + 10)
-      //-----------------------------
-
-      reqHandlerFinal = reqHandlerM(actorSystem,cache) _  //curried function, we set 2 first parameters and next need only one - request.
-
+      reqHandlerFinal <- Task{reqHandlerM(actorSystem,cache) _}  // Curried function.
       srvReqHdlr <- Task {
         serverSource.runForeach{
           conn => conn.handleWithAsyncHandler(rq => reqHandlerFinal(rq))
         }
       }
-
     } yield srvReqHdlr
-
   }
+
 
 }
 
