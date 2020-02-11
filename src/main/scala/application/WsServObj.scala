@@ -22,41 +22,6 @@ import scala.language.postfixOps
 
 object WsServObj {
 
-  private val logRequest: (LoggingAdapter, HttpRequest) => Unit = (log, req) => {
-    log.info(s"================= ${req.method} REQUEST ${req.protocol.value} =============")
-    log.info(s"uri : ${req.uri} ")
-    log.info("  ---------- HEADER ---------")
-    req.headers.zipWithIndex.foreach(hdr => log.info(s"   #${hdr._2} : ${hdr._1.toString}"))
-    log.info("  ---------------------------")
-    log.info(s"entity ${req.entity.toString} ")
-    log.info("========================================================")
-  }
-
-  private val reqJsonText =
-    """
-      |              {  "dicts": [
-      |                {
-      |                  "proc":"prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"
-      |                },
-      |                  {
-      |                    "proc":"prm_salary.pkg_web_cons_rep_grbs_list(refcur => ?, p_user_id => 45224506)"
-      |                  },
-      |                {
-      |                  "proc":"prm_salary.pkg_web_cons_rep_institution_list(refcur => ?, p_user_id => 45224506)"
-      |                },
-      |                {
-      |                  "proc":"prm_salary.pkg_web_cons_rep_form_type_list(refcur => ?)"
-      |                },
-      |                {
-      |                  "proc":"prm_salary.pkg_web_cons_rep_territory_list(refcur => ?)"
-      |                },
-      |                {
-      |                  "proc":"prm_salary.pkg_web_cons_rep_okved_list(refcur => ?)"
-      |                }
-      |              ]
-      |             }
-      |""".stripMargin
-
   //ex of using Ref for cache. https://stackoverflow.com/questions/57252919/scala-zio-ref-datatype
 
   /**
@@ -128,48 +93,28 @@ log.info(s" After currCacheValNew = $currCacheValNew")
     type IncConnSrvBind = akka.stream.scaladsl.Source[IncomingConnection, Future[ServerBinding]]
   }
 
+
   def reqHandlerM(actorSystem: ActorSystem, cache: Ref[Int])(request: HttpRequest): Future[HttpResponse] = {
     implicit val system = actorSystem
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
     implicit val executionContext = system.dispatcher
     val log = Logging(system,"WsDb")
+    import ReqResp._
 
+    /**
+     * unsafeRunToFuture
+    */
     request match {
-      case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), httpHeader, requestEntity, requestProtocol) => {
-        logRequest(log, request)
-        Future.successful {
-          val resJson: Json = s"SimpleTestString ${request.uri}".asJson
-          HttpResponse(
-            StatusCodes.OK,
-            entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson))
-          )
-        }
+      //case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), _, _, _) => routPostTest(request,log)
+      case request@HttpRequest(HttpMethods.GET, Uri.Path("/debug"), _, _, _) => routeGetDebug(request, cache, log)
+      /*
+      case request: HttpRequest => {request.discardEntityBytes()
+        route404(request,log)
       }
-      case request@HttpRequest(HttpMethods.GET, Uri.Path("/debug"), httpHeader, requestEntity, requestProtocol) => {
-        logRequest(log, request)
-        log.info(httpHeader.mkString(";"))
-        Future.successful {
-          val strDebugForm: String = Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").getLines
-            .mkString
-            .replace("req_json_text", reqJsonText)
-          HttpResponse(
-            StatusCodes.OK,
-            entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)
-          )
-        }
-      }
-      case request: HttpRequest => {
-        logRequest(log, request)
-        request.discardEntityBytes()
-        Future.successful {
-          HttpResponse(404, entity = "Unknown resource!")
-        }
-      }
-
-
-
+        */
     }
+
   }
 
 
