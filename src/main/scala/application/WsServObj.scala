@@ -111,7 +111,6 @@ object WsServObj {
   import scala.io.Source
 
   def reqHandlerM(actorSystem: ActorSystem, cache: Ref[Int])(request: HttpRequest): Future[HttpResponse] = {
-  //val reqHandlerM: (Ref[Int], ActorSystem, HttpRequest) => Future[HttpResponse] = (cache, actorSystem, request) => {
     implicit val system = actorSystem
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
