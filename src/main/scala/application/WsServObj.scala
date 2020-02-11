@@ -1,7 +1,7 @@
 package application
 
 import akka.Done
-import zio.{DefaultRuntime, Managed, Ref, Schedule, Task, UIO, ZEnv, ZIO}
+import zio.{DefaultRuntime, Managed, RIO, Ref, Schedule, Task, UIO, ZEnv, ZIO}
 import akka.actor.{ActorSystem, _}
 import akka.event.{Logging, LoggingAdapter}
 import akka.http.scaladsl.Http.{IncomingConnection, ServerBinding}
@@ -14,6 +14,7 @@ import io.circe.syntax._
 import io.circe.{Json, Printer}
 import zio.console.putStrLn
 import akka.http.scaladsl.model.HttpCharsets._
+import application.WsServObj.CommonTypes.IncConnSrvBind
 
 import scala.concurrent.Future
 import scala.language.postfixOps
@@ -76,7 +77,6 @@ object WsServObj {
    *
    */
   val WsServer: Config => ZIO[ZEnv, Throwable, Unit] = conf => {
-    //val ActSys = ActorSystem("WsDb")
     import zio.duration._
     /**
      * .fork
@@ -124,8 +124,9 @@ val currCacheValUIONew :UIO[Int] = cache.update(_ + 100)
 val currCacheValNew :Int = runtime.unsafeRun(currCacheValUIONew)
 log.info(s" After currCacheValNew = $currCacheValNew")
 */
-
-
+ object CommonTypes {
+    type IncConnSrvBind = akka.stream.scaladsl.Source[IncomingConnection, Future[ServerBinding]]
+  }
 
   def reqHandlerM(actorSystem: ActorSystem, cache: Ref[Int])(request: HttpRequest): Future[HttpResponse] = {
     implicit val system = actorSystem
@@ -190,19 +191,24 @@ log.info(s" After currCacheValNew = $currCacheValNew")
     import akka.stream.scaladsl.Source
       for {
         ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(actorSystem)
+
         currCacheValue <- cache.get
         _ <- putStrLn(s"startRequestHandler currCacheValue = $currCacheValue")
         _ <- cache.update(_ + 10)
-        reqHandlerFinal <- Task(reqHandlerM(actorSystem, cache) _) // Curried version of reqHandlerM
-        requestHandlerFunc: ZIO[HttpRequest, Throwable, Future[HttpResponse]] = ZIO.fromFunction((r: HttpRequest) =>
+
+        reqHandlerFinal :(HttpRequest => Future[HttpResponse]) <- Task(reqHandlerM(actorSystem, cache) _) // Curried version of reqHandlerM
+
+        requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] = ZIO.fromFunction((r: HttpRequest) =>
           reqHandlerFinal(r))
-        serverWithReqHandler: ZIO[Source[IncomingConnection, Future[ServerBinding]], Throwable, Future[Done]] =
-        ZIO.fromFunction((srv: Source[IncomingConnection, Future[ServerBinding]]) =>
+
+        serverWithReqHandler: RIO[IncConnSrvBind, Future[Done]] = ZIO.fromFunction((srv: IncConnSrvBind) =>
           srv.runForeach {
             conn => conn.handleWithAsyncHandler(r => new DefaultRuntime {}.unsafeRun(requestHandlerFunc.provide(r)))
           }
         )
+
         sourceWithServer <- serverWithReqHandler.provide(ss)
+
       } yield sourceWithServer
   }
 
