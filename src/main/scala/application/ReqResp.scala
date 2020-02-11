@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.MediaTypes.{`application/json`, `text/html`}
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes}
 import io.circe.{Json, Printer}
 import akka.Done
-import zio.{DefaultRuntime, Managed, Ref, Schedule, Task, ZEnv, ZIO}
+import zio.{DefaultRuntime, Managed, Ref, Schedule, Task, ZEnv, ZIO, console}
 import akka.actor.{ActorSystem, _}
 import akka.http.scaladsl.Http.ServerBinding
 import akka.http.scaladsl._
@@ -17,6 +17,7 @@ import io.circe.syntax._
 import io.circe.{Json, Printer}
 import zio.console.putStrLn
 import akka.http.scaladsl.model.HttpCharsets._
+
 import scala.language.postfixOps
 import scala.concurrent.Future
 import scala.io.Source
@@ -87,6 +88,7 @@ object ReqResp {
       _ <- putStrLn(s"uri : ${request.uri} ")
       _ <- putStrLn("  ---------- HEADER ---------")
       //_ <- request.headers.zipWithIndex(hdr => putStrLn(s"$hdr._1 $hdr._2"))
+      _ <- ZIO.foreach(request.headers.zipWithIndex)(hdr => console.putStrLn(s"   #${hdr._2} : ${hdr._1.toString}"))
       _ <- putStrLn("  ---------------------------")
       _ <- putStrLn(s"entity ${request.entity.toString} ")
       _ <- putStrLn("========================================================")
