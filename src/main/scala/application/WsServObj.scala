@@ -102,12 +102,14 @@ log.info(s" After currCacheValNew = $currCacheValNew")
     val log = Logging(system,"WsDb")
     import ReqResp._
 
+    val rt = new DefaultRuntime {}
+
     /**
      * unsafeRunToFuture
     */
     request match {
       //case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), _, _, _) => routPostTest(request,log)
-      case request@HttpRequest(HttpMethods.GET, Uri.Path("/debug"), _, _, _) => routeGetDebug(request, cache, log)
+      case request@HttpRequest(HttpMethods.GET, Uri.Path("/debug"), _, _, _) => rt.unsafeRunToFuture(routeGetDebug(request, cache, log))
       /*
       case request: HttpRequest => {request.discardEntityBytes()
         route404(request,log)

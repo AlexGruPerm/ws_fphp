@@ -17,8 +17,6 @@ import io.circe.syntax._
 import io.circe.{Json, Printer}
 import zio.console.putStrLn
 import akka.http.scaladsl.model.HttpCharsets._
-
-import scala.concurrent.Future
 import scala.language.postfixOps
 import scala.concurrent.Future
 import scala.io.Source
@@ -60,8 +58,14 @@ object ReqResp {
       |             }
       |""".stripMargin
 
+  /*
   val routPostTest: (HttpRequest,LoggingAdapter) => Future[HttpResponse] = (request,log) => {
     logRequest(log, request)
+    val futFiber :ZIO[ZEnv, Throwable, HttpResponse] = for {
+
+    } yield f
+
+    /*
     Future.successful {
       val resJson: Json = s"SimpleTestString ${request.uri}".asJson
       HttpResponse(
@@ -69,21 +73,27 @@ object ReqResp {
         entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson))
       )
     }
+    */
   }
+  */
 
-  import scala.io.Source
+ // logRequest(log, request)
 
-  val routeGetDebug: (HttpRequest,Ref[Int],LoggingAdapter) => Future[HttpResponse] = (request, cache, log) => {
-    logRequest(log, request)
-
-    val futFiber :ZIO[ZEnv, Throwable, HttpResponse] = for {
+  val routeGetDebug: (HttpRequest,Ref[Int],LoggingAdapter) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache, log) => for {
       strDebugForm <- Task{Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html")
         .getLines.mkString.replace("req_json_text", reqJsonText)}
+
+      _ <- putStrLn(s"================= ${request.method} REQUEST ${request.protocol.value} =============")
+      _ <- putStrLn(s"uri : ${request.uri} ")
+      _ <- putStrLn("  ---------- HEADER ---------")
+      //_ <- request.headers.zipWithIndex(hdr => putStrLn(s"$hdr._1 $hdr._2"))
+      _ <- putStrLn("  ---------------------------")
+      _ <- putStrLn(s"entity ${request.entity.toString} ")
+      _ <- putStrLn("========================================================")
 
       cvb <- cache.get
       _ <- putStrLn(s"BEFORE: cg=${cvb}")
       _ <- cache.update(_ + 100)
-
       cva <- cache.get
       _ <- putStrLn(s"AFTER: cg=${cva}")
 
@@ -95,30 +105,7 @@ object ReqResp {
       }
     } yield f
 
-    /*
-      val strDebugForm: String = Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").getLines
-        .mkString
-        .replace("req_json_text", reqJsonText)
 
-    Future.successful {
-    HttpResponse(
-        StatusCodes.OK,
-        entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)
-      )
-    }
-    */
-
-    new DefaultRuntime {}.unsafeRunToFuture(futFiber)
-
-    /*
-        Future.successful {
-    HttpResponse(
-        StatusCodes.OK,
-        entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)
-      )
-    }
-    */
-  }
 
   val route404: (HttpRequest,LoggingAdapter) => Future[HttpResponse] = (request,log) => {
     logRequest(log, request)
