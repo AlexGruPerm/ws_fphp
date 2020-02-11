@@ -110,7 +110,7 @@ object WsServObj {
 
   import scala.io.Source
 
-  def reqHandlerM(actorSystem :ActorSystem, cache :Ref[Int])(request :HttpRequest) :Future[HttpResponse] = {
+  def reqHandlerM(actorSystem: ActorSystem, cache: Ref[Int])(request: HttpRequest): Future[HttpResponse] = {
   //val reqHandlerM: (Ref[Int], ActorSystem, HttpRequest) => Future[HttpResponse] = (cache, actorSystem, request) => {
     implicit val system = actorSystem
     import scala.concurrent.duration._
@@ -121,12 +121,28 @@ object WsServObj {
     request match {
       case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), httpHeader, requestEntity, requestProtocol)
       => {
-        /*
+        /* read example
         val currCacheValUIO :UIO[Int] = cache.get
         val runtime = new DefaultRuntime {}
         val currCacheVal :Int = runtime.unsafeRun(currCacheValUIO)
-        log.info(s"xxxxxxxxxx currCacheVal = $currCacheVal")
+        log.info(s"currCacheVal = $currCacheVal")
         */
+        /* write example
+        val currCacheValUIO :UIO[Int] = cache.get
+        val runtime = new DefaultRuntime {}
+        val currCacheVal :Int = runtime.unsafeRun(currCacheValUIO)
+        log.info(s" Before currCacheVal = $currCacheVal")
+        val currCacheValUIONew :UIO[Int] = cache.update(_ + 100)
+        val currCacheValNew :Int = runtime.unsafeRun(currCacheValUIONew)
+        log.info(s" After currCacheValNew = $currCacheValNew")
+        */
+
+        /*
+        val c = for {
+          _ <- cache.update(_ + 100)
+        } yield ()
+        */
+
         logRequest(log, request)
         Future.successful {
           val resJson: Json = s"SimpleTestString ${request.uri}".asJson
