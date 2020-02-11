@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.MediaTypes.{`application/json`, `text/html`}
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes}
 import io.circe.{Json, Printer}
 import akka.Done
-import zio.{Managed, Ref, Schedule, Task, ZEnv, ZIO}
+import zio.{DefaultRuntime, Managed, Ref, Schedule, Task, ZEnv, ZIO}
 import akka.actor.{ActorSystem, _}
 import akka.http.scaladsl.Http.ServerBinding
 import akka.http.scaladsl._
@@ -71,21 +71,53 @@ object ReqResp {
     }
   }
 
+  import scala.io.Source
+
   val routeGetDebug: (HttpRequest,Ref[Int],LoggingAdapter) => Future[HttpResponse] = (request, cache, log) => {
     logRequest(log, request)
 
+    val futFiber :ZIO[ZEnv, Throwable, HttpResponse] = for {
+      strDebugForm <- Task{Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html")
+        .getLines.mkString.replace("req_json_text", reqJsonText)}
 
-    Future.successful {
+      cvb <- cache.get
+      _ <- putStrLn(s"BEFORE: cg=${cvb}")
+      _ <- cache.update(_ + 100)
+
+      cva <- cache.get
+      _ <- putStrLn(s"AFTER: cg=${cva}")
+
+      f <- ZIO.fromFuture { implicit ec =>
+        Future.successful(HttpResponse(StatusCodes.OK, entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)))
+          .flatMap{result :HttpResponse =>
+            Future(result).map(_ => result)
+        }
+      }
+    } yield f
+
+    /*
       val strDebugForm: String = Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").getLines
         .mkString
         .replace("req_json_text", reqJsonText)
-      HttpResponse(
+
+    Future.successful {
+    HttpResponse(
         StatusCodes.OK,
         entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)
       )
     }
+    */
 
+    new DefaultRuntime {}.unsafeRunToFuture(futFiber)
 
+    /*
+        Future.successful {
+    HttpResponse(
+        StatusCodes.OK,
+        entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)
+      )
+    }
+    */
   }
 
   val route404: (HttpRequest,LoggingAdapter) => Future[HttpResponse] = (request,log) => {
