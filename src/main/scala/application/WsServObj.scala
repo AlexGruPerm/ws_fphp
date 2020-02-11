@@ -187,18 +187,44 @@ object WsServObj {
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
     implicit val executionContext = system.dispatcher
+    import akka.stream.scaladsl.Source
     for {
-      serverSource <- serverSource(actorSystem)
+      ss : Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(actorSystem)
+  /*
       currValue <- cache.get
       _ <- putStrLn(s"startRequestHandler STATE = $currValue")
       _ <- cache.update(_ + 10)
+*/
       reqHandlerFinal <- Task{reqHandlerM(actorSystem,cache) _}  // Curried function.
+
+      zfunc: ZIO[HttpRequest, Nothing, Future[HttpResponse]] = ZIO.fromFunction((r: HttpRequest) => reqHandlerFinal(r))
+
+      yfunc: ZIO[Source[Http.IncomingConnection, Future[ServerBinding]], Nothing, Future[Done]] =
+      ZIO.fromFunction((srv: Source[Http.IncomingConnection, Future[ServerBinding]]) =>
+        srv.runForeach{conn => conn.handleWithAsyncHandler(r => (new DefaultRuntime {}).unsafeRun(zfunc.provide(r)) )})
+
+      r <- yfunc.provide(ss)
+
+          /*
+        srvReqHdlr <- Task {
+          serverSource.runForeach{
+            conn :IncomingConnection => conn.handleWithAsyncHandler(r => zfunc.provide(r))
+              //reqHandlerFinal(rq)
+            )
+          }
+        }
+      */
+
+      } yield r // reqHandlerFinal(reqFromEnv)
+
+      /*
+      don't modify
       srvReqHdlr <- Task {
         serverSource.runForeach{
           conn => conn.handleWithAsyncHandler(rq => reqHandlerFinal(rq))
         }
       }
-    } yield srvReqHdlr
+      */
   }
 
 
