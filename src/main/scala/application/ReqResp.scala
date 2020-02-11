@@ -22,6 +22,25 @@ import scala.language.postfixOps
 import scala.concurrent.Future
 import scala.io.Source
 
+import akka.Done
+import zio.{DefaultRuntime, Managed, RIO, Ref, Schedule, Task, UIO, ZEnv, ZIO}
+import akka.actor.{ActorSystem, _}
+import akka.event.{Logging, LoggingAdapter}
+import akka.http.scaladsl.Http.{IncomingConnection, ServerBinding}
+import akka.http.scaladsl._
+import akka.http.scaladsl.model.MediaTypes._
+import akka.http.scaladsl.model.{HttpRequest, _}
+import akka.util.Timeout
+import confs.Config
+import io.circe.syntax._
+import io.circe.{Json, Printer}
+import zio.console.putStrLn
+import akka.http.scaladsl.model.HttpCharsets._
+import application.WsServObj.CommonTypes.IncConnSrvBind
+
+import scala.concurrent.Future
+import scala.language.postfixOps
+
 object ReqResp {
 
   private val logRequest: (LoggingAdapter, HttpRequest) => Unit = (log, req) => {
@@ -59,50 +78,54 @@ object ReqResp {
       |             }
       |""".stripMargin
 
-  /*
-  val routPostTest: (HttpRequest,LoggingAdapter) => Future[HttpResponse] = (request,log) => {
-    logRequest(log, request)
-    val futFiber :ZIO[ZEnv, Throwable, HttpResponse] = for {
 
-    } yield f
-
-    /*
-    Future.successful {
-      val resJson: Json = s"SimpleTestString ${request.uri}".asJson
-      HttpResponse(
-        StatusCodes.OK,
-        entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson))
-      )
-    }
-    */
-  }
-  */
-
- // logRequest(log, request)
-
-  val routeGetDebug: (HttpRequest,Ref[Int],LoggingAdapter) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache, log) => for {
-      strDebugForm <- Task{Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html")
-        .getLines.mkString.replace("req_json_text", reqJsonText)}
+  val routPostTest: (HttpRequest,Ref[Int],LoggingAdapter) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache, log) => for {
+      resJson <- Task{s"SimpleTestString ${request.uri}".asJson}
 
       _ <- putStrLn(s"================= ${request.method} REQUEST ${request.protocol.value} =============")
       _ <- putStrLn(s"uri : ${request.uri} ")
       _ <- putStrLn("  ---------- HEADER ---------")
-      //_ <- request.headers.zipWithIndex(hdr => putStrLn(s"$hdr._1 $hdr._2"))
       _ <- ZIO.foreach(request.headers.zipWithIndex)(hdr => console.putStrLn(s"   #${hdr._2} : ${hdr._1.toString}"))
       _ <- putStrLn("  ---------------------------")
       _ <- putStrLn(s"entity ${request.entity.toString} ")
       _ <- putStrLn("========================================================")
 
       cvb <- cache.get
-      _ <- putStrLn(s"BEFORE: cg=${cvb}")
+      _ <- putStrLn(s"BEFORE(test): cg=${cvb}")
       _ <- cache.update(_ + 100)
       cva <- cache.get
-      _ <- putStrLn(s"AFTER: cg=${cva}")
+      _ <- putStrLn(s"AFTER(test): cg=${cva}")
+
+      f <- ZIO.fromFuture { implicit ec =>
+        Future.successful(HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson))))
+          .flatMap{result :HttpResponse => Future(result).map(_ => result)
+          }
+      }
+    } yield f
+
+
+  val routeGetDebug: (HttpRequest,Ref[Int],LoggingAdapter) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache, log) => for {
+      //strDebugForm <- Task{Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html")
+        strDebugForm <- Task{Source.fromFile("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html")
+        .getLines.mkString.replace("req_json_text", reqJsonText)}
+
+      _ <- putStrLn(s"================= ${request.method} REQUEST ${request.protocol.value} =============")
+      _ <- putStrLn(s"uri : ${request.uri} ")
+      _ <- putStrLn("  ---------- HEADER ---------")
+      _ <- ZIO.foreach(request.headers.zipWithIndex)(hdr => console.putStrLn(s"   #${hdr._2} : ${hdr._1.toString}"))
+      _ <- putStrLn("  ---------------------------")
+      _ <- putStrLn(s"entity ${request.entity.toString} ")
+      _ <- putStrLn("========================================================")
+
+      cvb <- cache.get
+      _ <- putStrLn(s"BEFORE(debug): cg=${cvb}")
+      _ <- cache.update(_ + 100)
+      cva <- cache.get
+      _ <- putStrLn(s"AFTER(debug): cg=${cva}")
 
       f <- ZIO.fromFuture { implicit ec =>
         Future.successful(HttpResponse(StatusCodes.OK, entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)))
-          .flatMap{result :HttpResponse =>
-            Future(result).map(_ => result)
+          .flatMap{result :HttpResponse => Future(result).map(_ => result)
         }
       }
     } yield f
