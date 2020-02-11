@@ -110,6 +110,23 @@ object WsServObj {
 
   import scala.io.Source
 
+  /* read example
+val currCacheValUIO :UIO[Int] = cache.get
+val runtime = new DefaultRuntime {}
+val currCacheVal :Int = runtime.unsafeRun(currCacheValUIO)
+log.info(s"currCacheVal = $currCacheVal")
+ // write example
+val currCacheValUIO :UIO[Int] = cache.get
+val runtime = new DefaultRuntime {}
+val currCacheVal :Int = runtime.unsafeRun(currCacheValUIO)
+log.info(s" Before currCacheVal = $currCacheVal")
+val currCacheValUIONew :UIO[Int] = cache.update(_ + 100)
+val currCacheValNew :Int = runtime.unsafeRun(currCacheValUIONew)
+log.info(s" After currCacheValNew = $currCacheValNew")
+*/
+
+
+
   def reqHandlerM(actorSystem: ActorSystem, cache: Ref[Int])(request: HttpRequest): Future[HttpResponse] = {
     implicit val system = actorSystem
     import scala.concurrent.duration._
@@ -118,30 +135,7 @@ object WsServObj {
     val log = Logging(system,"WsDb")
 
     request match {
-      case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), httpHeader, requestEntity, requestProtocol)
-      => {
-        /* read example
-        val currCacheValUIO :UIO[Int] = cache.get
-        val runtime = new DefaultRuntime {}
-        val currCacheVal :Int = runtime.unsafeRun(currCacheValUIO)
-        log.info(s"currCacheVal = $currCacheVal")
-        */
-        /* write example
-        val currCacheValUIO :UIO[Int] = cache.get
-        val runtime = new DefaultRuntime {}
-        val currCacheVal :Int = runtime.unsafeRun(currCacheValUIO)
-        log.info(s" Before currCacheVal = $currCacheVal")
-        val currCacheValUIONew :UIO[Int] = cache.update(_ + 100)
-        val currCacheValNew :Int = runtime.unsafeRun(currCacheValUIONew)
-        log.info(s" After currCacheValNew = $currCacheValNew")
-        */
-
-        /*
-        val c = for {
-          _ <- cache.update(_ + 100)
-        } yield ()
-        */
-
+      case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), httpHeader, requestEntity, requestProtocol) => {
         logRequest(log, request)
         Future.successful {
           val resJson: Json = s"SimpleTestString ${request.uri}".asJson
@@ -151,8 +145,8 @@ object WsServObj {
           )
         }
       }
-      case request@HttpRequest(HttpMethods.GET, Uri.Path("/debug"), httpHeader, requestEntity, requestProtocol)
-      => logRequest(log, request)
+      case request@HttpRequest(HttpMethods.GET, Uri.Path("/debug"), httpHeader, requestEntity, requestProtocol) => {
+        logRequest(log, request)
         log.info(httpHeader.mkString(";"))
         Future.successful {
           val strDebugForm: String = Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").getLines
@@ -163,12 +157,17 @@ object WsServObj {
             entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)
           )
         }
-      case request: HttpRequest =>
+      }
+      case request: HttpRequest => {
         logRequest(log, request)
         request.discardEntityBytes()
         Future.successful {
           HttpResponse(404, entity = "Unknown resource!")
         }
+      }
+
+
+
     }
   }
 
@@ -182,49 +181,29 @@ object WsServObj {
    * (handler: HttpRequest => Future[HttpResponse])
    *
    */
-  val startRequestHandler: (Ref[Int], Config, ActorSystem) => ZIO[ZEnv, Throwable, Future[Done]] = (cache, conf, actorSystem) => {
+  val startRequestHandler: (Ref[Int], Config, ActorSystem) => ZIO[ZEnv, Throwable, Future[Done]] =
+    (cache, conf, actorSystem) => {
     implicit val system = actorSystem
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
     implicit val executionContext = system.dispatcher
     import akka.stream.scaladsl.Source
-    for {
-      ss : Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(actorSystem)
-  /*
-      currValue <- cache.get
-      _ <- putStrLn(s"startRequestHandler STATE = $currValue")
-      _ <- cache.update(_ + 10)
-*/
-      reqHandlerFinal <- Task{reqHandlerM(actorSystem,cache) _}  // Curried function.
-
-      zfunc: ZIO[HttpRequest, Nothing, Future[HttpResponse]] = ZIO.fromFunction((r: HttpRequest) => reqHandlerFinal(r))
-
-      yfunc: ZIO[Source[Http.IncomingConnection, Future[ServerBinding]], Nothing, Future[Done]] =
-      ZIO.fromFunction((srv: Source[Http.IncomingConnection, Future[ServerBinding]]) =>
-        srv.runForeach{conn => conn.handleWithAsyncHandler(r => (new DefaultRuntime {}).unsafeRun(zfunc.provide(r)) )})
-
-      r <- yfunc.provide(ss)
-
-          /*
-        srvReqHdlr <- Task {
-          serverSource.runForeach{
-            conn :IncomingConnection => conn.handleWithAsyncHandler(r => zfunc.provide(r))
-              //reqHandlerFinal(rq)
-            )
+      for {
+        ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(actorSystem)
+        currCacheValue <- cache.get
+        _ <- putStrLn(s"startRequestHandler currCacheValue = $currCacheValue")
+        _ <- cache.update(_ + 10)
+        reqHandlerFinal <- Task(reqHandlerM(actorSystem, cache) _) // Curried version of reqHandlerM
+        requestHandlerFunc: ZIO[HttpRequest, Throwable, Future[HttpResponse]] = ZIO.fromFunction((r: HttpRequest) =>
+          reqHandlerFinal(r))
+        serverWithReqHandler: ZIO[Source[IncomingConnection, Future[ServerBinding]], Throwable, Future[Done]] =
+        ZIO.fromFunction((srv: Source[IncomingConnection, Future[ServerBinding]]) =>
+          srv.runForeach {
+            conn => conn.handleWithAsyncHandler(r => new DefaultRuntime {}.unsafeRun(requestHandlerFunc.provide(r)))
           }
-        }
-      */
-
-      } yield r // reqHandlerFinal(reqFromEnv)
-
-      /*
-      don't modify
-      srvReqHdlr <- Task {
-        serverSource.runForeach{
-          conn => conn.handleWithAsyncHandler(rq => reqHandlerFinal(rq))
-        }
-      }
-      */
+        )
+        sourceWithServer <- serverWithReqHandler.provide(ss)
+      } yield sourceWithServer
   }
 
 
