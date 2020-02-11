@@ -99,23 +99,28 @@ log.info(s" After currCacheValNew = $currCacheValNew")
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
     implicit val executionContext = system.dispatcher
-    val log = Logging(system,"WsDb")
+    val log = Logging(system, "WsDb")
     import ReqResp._
 
     val rt = new DefaultRuntime {}
 
     /**
-     * unsafeRunToFuture
-    */
-    request match {
-      case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), _, _, _) => rt.unsafeRunToFuture(routPostTest(request, cache, log))
-      case request@HttpRequest(HttpMethods.GET, Uri.Path("/debug"), _, _, _) => rt.unsafeRunToFuture(routeGetDebug(request, cache, log))
-      /*
-      case request: HttpRequest => {request.discardEntityBytes()
-        route404(request,log)
+      * unsafeRunToFuture
+      */
+    val responseFuture: ZIO[ZEnv, Throwable, HttpResponse] = request match {
+      case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), _, _, _) =>
+        routPostTest(request, cache, log)
+      case request@HttpRequest(HttpMethods.GET, Uri.Path("/debug"), _, _, _) =>
+        routeGetDebug(request, cache, log)
+      case request@HttpRequest(HttpMethods.GET, Uri.Path("/favicon.ico"), _, _, _) =>
+        routeGetFavicon(request, cache, log)
+      case request: HttpRequest => {
+        request.discardEntityBytes()
+        route404(request, cache, log)
       }
-        */
     }
+
+    rt.unsafeRunToFuture(responseFuture)
 
   }
 
