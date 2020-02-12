@@ -1,30 +1,22 @@
 package application
 
 import akka.Done
-import zio.{DefaultRuntime, Managed, RIO, Ref, Schedule, Task, UIO, ZEnv, ZIO}
-import akka.actor.{ActorSystem, _}
-import akka.event.{Logging, LoggingAdapter}
+import akka.actor.ActorSystem
 import akka.http.scaladsl.Http.{IncomingConnection, ServerBinding}
 import akka.http.scaladsl._
-import akka.http.scaladsl.model.MediaTypes._
 import akka.http.scaladsl.model.{HttpRequest, _}
 import akka.util.Timeout
-import confs.Config
-import io.circe.syntax._
-import io.circe.{Json, Printer}
-import zio.console.putStrLn
-import akka.http.scaladsl.model.HttpCharsets._
 import application.WsServObj.CommonTypes.IncConnSrvBind
-import zio.logging.{LogLevel, log}
-
-import scala.concurrent.Future
-import scala.language.postfixOps
+import confs.Config
 import logging.LoggerCommon._
+import zio.logging.{LogLevel, log}
+import zio._
 
+import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.language.postfixOps
 
+//ex of using Ref for cache. https://stackoverflow.com/questions/57252919/scala-zio-ref-datatype
 object WsServObj {
-
-  //ex of using Ref for cache. https://stackoverflow.com/questions/57252919/scala-zio-ref-datatype
 
   /**
    *
@@ -86,52 +78,27 @@ object WsServObj {
       ss <- Task(Http(actorSystem).bind(interface = conf.api.endpoint, port = conf.api.port))
     } yield ss
 
-  import scala.io.Source
-
-  /* read example
-val currCacheValUIO :UIO[Int] = cache.get
-val runtime = new DefaultRuntime {}
-val currCacheVal :Int = runtime.unsafeRun(currCacheValUIO)
-log.info(s"currCacheVal = $currCacheVal")
- // write example
-val currCacheValUIO :UIO[Int] = cache.get
-val runtime = new DefaultRuntime {}
-val currCacheVal :Int = runtime.unsafeRun(currCacheValUIO)
-log.info(s" Before currCacheVal = $currCacheVal")
-val currCacheValUIONew :UIO[Int] = cache.update(_ + 100)
-val currCacheValNew :Int = runtime.unsafeRun(currCacheValUIONew)
-log.info(s" After currCacheValNew = $currCacheValNew")
-*/
-
-
-
   def reqHandlerM(actorSystem: ActorSystem, cache: Ref[Int])(request: HttpRequest): Future[HttpResponse] = {
-    implicit val system = actorSystem
+    implicit val system: ActorSystem = actorSystem
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
-    implicit val executionContext = system.dispatcher
+    implicit val executionContext: ExecutionContextExecutor = system.dispatcher
     import ReqResp._
 
-    val rt = new DefaultRuntime {}
-
-    /**
-      * unsafeRunToFuture
-      */
     val responseFuture: ZIO[ZEnv, Throwable, HttpResponse] =
       request match {
-        case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), _, _, _) =>
-          routPostTest(request, cache)
-        case request@HttpRequest(HttpMethods.GET, Uri.Path("/debug"), _, _, _) =>
-          routeGetDebug(request, cache)
-        case request@HttpRequest(HttpMethods.GET, Uri.Path("/favicon.ico"), _, _, _) =>
-          routeGetFavicon(request)
-        case request: HttpRequest => {
-          request.discardEntityBytes()
+        case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), _, _, _) => routPostTest(request, cache)
+        case request@HttpRequest(HttpMethods.GET, _, _, _, _) =>
+          request match {
+            case request@HttpRequest(_, Uri.Path("/debug"), _, _, _) => routeGetDebug(request, cache)
+            case request@HttpRequest(_, Uri.Path("/favicon.ico"), _, _, _) => routeGetFavicon(request)
+          }
+        case request: HttpRequest => {request.discardEntityBytes()
           route404(request)
         }
       }
 
-    rt.unsafeRunToFuture(responseFuture)
+    new DefaultRuntime {}.unsafeRunToFuture(responseFuture)
   }
 
 
@@ -146,22 +113,19 @@ log.info(s" After currCacheValNew = $currCacheValNew")
    */
   val startRequestHandler: (Ref[Int], Config, ActorSystem) => ZIO[ZEnv, Throwable, Future[Done]] =
     (cache, conf, actorSystem) => {
-    implicit val system = actorSystem
+    implicit val system: ActorSystem = actorSystem
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
-    implicit val executionContext = system.dispatcher
+    implicit val executionContext: ExecutionContextExecutor = system.dispatcher
     import akka.stream.scaladsl.Source
       for {
         ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(conf,actorSystem)
         _  <- zio.logging.locallyAnnotate(correlationId,"req-handler"){
           log(LogLevel.Info)(s"ServerSource created")
           }.provideSomeM(env)
-        /*
-        currCacheValue <- cache.get
-        _ <- putStrLn(s"startRequestHandler currCacheValue = $currCacheValue")
-        _ <- cache.update(_ + 10)
-        */
-        reqHandlerFinal :(HttpRequest => Future[HttpResponse]) <- Task(reqHandlerM(actorSystem, cache) _) // Curried version of reqHandlerM
+
+        // Curried version of reqHandlerM has type HttpRequest => Future[HttpResponse]
+        reqHandlerFinal <- Task(reqHandlerM(actorSystem, cache) _)
 
         requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] = ZIO.fromFunction((r: HttpRequest) =>
           reqHandlerFinal(r))

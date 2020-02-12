@@ -10,7 +10,7 @@ import logging.LoggerCommon._
 /**
  * https://zio.dev/docs/overview/overview_index
  * Apache DBCP : https://devcenter.heroku.com/articles/database-connection-pooling-with-scala
- *  todo: add timout on effects  https://zio.dev/docs/overview/overview_basic_concurrency
+ * timout on effects  https://zio.dev/docs/overview/overview_basic_concurrency
  *    Timeout ZIO lets you timeout any effect using the ZIO#timeout method
  */
 
@@ -47,12 +47,6 @@ object Main extends zio.App {
       _ <- log("Web service stopping").provideSomeM(env)
     } yield res
 
-  /* todo: remove this examples.
-        _ <- log("Web service starting").provideSomeM(env)
-      _ <- zio.logging.locallyAnnotate(correlationId,"wsapp-correlation-id"){
-         log(LogLevel.Debug)("Hello from ZIO logger")
-        }.provideSomeM(env)
-  */
 
 }
 
