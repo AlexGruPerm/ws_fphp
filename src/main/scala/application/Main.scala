@@ -1,10 +1,11 @@
 package application
 
 import confs.Configuration
-import org.slf4j.LoggerFactory
-import zio.{Task, UIO, URIO, ZIO}
+import zio.URIO
+import zio.{Task, UIO, ZIO}
 import zio.ZEnv
-import zio.console.putStrLn
+import zio.logging._
+import logging.LoggerCommon._
 
 /**
  * https://zio.dev/docs/overview/overview_index
@@ -12,33 +13,46 @@ import zio.console.putStrLn
  *  todo: add timout on effects  https://zio.dev/docs/overview/overview_basic_concurrency
  *    Timeout ZIO lets you timeout any effect using the ZIO#timeout method
  */
-object Main extends zio.App {
 
-  override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] = {
-    val logger = LoggerFactory.getLogger(getClass.getName)
-    logger.info("Method run of Main")
-    WsApp(args).foldM(
-        throwable => putStrLn(s"Error: ${throwable.getMessage}") *> URIO.foreach(throwable.getStackTrace) {
-          sTraceRow => putStrLn(s"$sTraceRow")
-          }.map(_ => UIO.succeed(1)).flatten,
-        _ => UIO.succeed(0)
-      )
-  }
+object Main extends zio.App {
 
   private val checkArgs : List[String] => Task[Unit] = args => for {
     checkRes <- if (args.length < 0) Task.fail(new IllegalArgumentException("Need config file as parameter."))
     else UIO.succeed(())
   } yield checkRes
 
-  private val WsApp: List[String] => ZIO[ZEnv, Throwable, Unit]  = args =>
+  override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] =
+    WsApp(args)
+      .foldM(
+        throwable =>
+          log(LogLevel.Error)(s"Error: ${throwable.getMessage}").provideSomeM(env) *>
+            URIO.foreach(throwable.getStackTrace) { sTraceRow =>
+              log(LogLevel.Error)(s"$sTraceRow").provideSomeM(env)
+            }.map(_ => UIO.succeed(1)).flatten,
+        _ => {
+          log(LogLevel.Info)(s"Success exit of application.").provideSomeM(env)
+          UIO.succeed(0)
+        }
+      )
+
+  private val WsApp: List[String] => ZIO[ZEnv, Throwable, Unit] = args =>
     for {
-      _ <- putStrLn("[1] Web service starting...")
+      _  <- zio.logging.locallyAnnotate(correlationId,"wsapp"){
+         log(LogLevel.Info)("Web service starting")
+        }.provideSomeM(env)
       _ <- checkArgs(args)
+      ////cfg <- Configuration.config.load("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/application.conf")
       cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
-      //cfg <- Configuration.config.load("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/application.conf")
       res <- WsServObj.WsServer(cfg)
-      _ <- putStrLn("[7] Web service stopping...")
+      _ <- log("Web service stopping").provideSomeM(env)
     } yield res
+
+  /* todo: remove this examples.
+        _ <- log("Web service starting").provideSomeM(env)
+      _ <- zio.logging.locallyAnnotate(correlationId,"wsapp-correlation-id"){
+         log(LogLevel.Debug)("Hello from ZIO logger")
+        }.provideSomeM(env)
+  */
 
 }
 

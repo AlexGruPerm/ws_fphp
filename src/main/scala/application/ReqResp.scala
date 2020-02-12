@@ -38,13 +38,16 @@ import io.circe.{Json, Printer}
 import zio.console.putStrLn
 import akka.http.scaladsl.model.HttpCharsets._
 import akka.stream.scaladsl.FileIO
+import logging.LoggerCommon._
 import application.WsServObj.CommonTypes.IncConnSrvBind
 
+import zio.logging.{LogLevel, log}
 import scala.concurrent.Future
 import scala.language.postfixOps
 
 object ReqResp {
 
+/*
   private val logRequest: (LoggingAdapter, HttpRequest) => Unit = (log, req) => {
     log.info(s"================= ${req.method} REQUEST ${req.protocol.value} =============")
     log.info(s"uri : ${req.uri} ")
@@ -54,6 +57,7 @@ object ReqResp {
     log.info(s"entity ${req.entity.toString} ")
     log.info("========================================================")
   }
+  */
 
   private val reqJsonText =
     """
@@ -81,15 +85,25 @@ object ReqResp {
       |""".stripMargin
 
 
+  val logRequest : HttpRequest => Task[Unit] = request => for {
+    _  <- zio.logging.locallyAnnotate(correlationId,"log_request"){
+      for {
+        _ <- log(LogLevel.Trace)(s"================= ${request.method} REQUEST ${request.protocol.value} =====")
+        _ <- log(LogLevel.Trace)(s"uri : ${request.uri} ")
+        _ <- log(LogLevel.Trace)("  ---------- HEADER ---------")
+        _ <- ZIO.foreach(request.headers.zipWithIndex)(hdr => log(LogLevel.Trace)
+        (s"   #${hdr._2} : ${hdr._1.toString}"))
+        _ <- log(LogLevel.Trace)(s"  ---------------------------")
+        _ <- log(LogLevel.Trace)(s"entity ${request.entity.toString} ")
+        _ <- log(LogLevel.Trace)("========================================================")
+      } yield ()
+    }.provideSomeM(env)
+  } yield ()
+
+
   val routPostTest: (HttpRequest,Ref[Int]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
       resJson <- Task{s"SimpleTestString ${request.uri}".asJson}
-      _ <- putStrLn(s"================= ${request.method} REQUEST ${request.protocol.value} =============")
-      _ <- putStrLn(s"uri : ${request.uri} ")
-      _ <- putStrLn("  ---------- HEADER ---------")
-      _ <- ZIO.foreach(request.headers.zipWithIndex)(hdr => console.putStrLn(s"   #${hdr._2} : ${hdr._1.toString}"))
-      _ <- putStrLn("  ---------------------------")
-      _ <- putStrLn(s"entity ${request.entity.toString} ")
-      _ <- putStrLn("========================================================")
+      _ <- logRequest(request)
 
       cvb <- cache.get
       _ <- putStrLn(s"BEFORE(test): cg=${cvb}")
@@ -105,30 +119,27 @@ object ReqResp {
     } yield f
 
 
-  val routeGetDebug: (HttpRequest,Ref[Int]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
-          strDebugForm <- Task{Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html")
+  val routeGetDebug: (HttpRequest, Ref[Int]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
+    strDebugForm <- Task {
+      Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html")
         //strDebugForm <- Task{Source.fromFile("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html")
-        .getLines.mkString.replace("req_json_text", reqJsonText)}
-      _ <- putStrLn(s"================= ${request.method} REQUEST ${request.protocol.value} =============")
-      _ <- putStrLn(s"uri : ${request.uri} ")
-      _ <- putStrLn("  ---------- HEADER ---------")
-      _ <- ZIO.foreach(request.headers.zipWithIndex)(hdr => console.putStrLn(s"   #${hdr._2} : ${hdr._1.toString}"))
-      _ <- putStrLn("  ---------------------------")
-      _ <- putStrLn(s"entity ${request.entity.toString} ")
-      _ <- putStrLn("========================================================")
-      cvb <- cache.get
-      _ <- putStrLn(s"BEFORE(debug): cg=${cvb}")
-      _ <- cache.update(_ + 3)
-      cva <- cache.get
-      _ <- putStrLn(s"AFTER(debug): cg=${cva}")
+        .getLines.mkString.replace("req_json_text", reqJsonText)
+    }
+    _ <- logRequest(request)
 
-      f <- ZIO.fromFuture { implicit ec =>
-        Future.successful(HttpResponse(StatusCodes.OK, entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)))
-          .flatMap{
-            result :HttpResponse => Future(result).map(_ => result)
+    cvb <- cache.get
+    _ <- putStrLn(s"BEFORE(debug): cg=${cvb}")
+    _ <- cache.update(_ + 3)
+    cva <- cache.get
+    _ <- putStrLn(s"AFTER(debug): cg=${cva}")
+
+    f <- ZIO.fromFuture { implicit ec =>
+      Future.successful(HttpResponse(StatusCodes.OK, entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)))
+        .flatMap {
+          result: HttpResponse => Future(result).map(_ => result)
         }
-      }
-    } yield f
+    }
+  } yield f
 
 /*
 todo: remove
@@ -137,7 +148,7 @@ todo: remove
   import akka.http.impl._
   */
 
-  val routeGetFavicon: (HttpRequest,Ref[Int]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
+  val routeGetFavicon: HttpRequest => ZIO[ZEnv, Throwable, HttpResponse] = request => for {
     _ <- putStrLn(s"================= ${request.method} REQUEST ${request.protocol.value} =============")
     //icoFile <- Task{new File("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/favicon.png")}
     icoFile <- Task{new File("C:\\ws_fphp\\src\\main\\resources\\favicon.png")}
@@ -153,14 +164,8 @@ todo: remove
   } yield f
 
 
-  val route404: (HttpRequest,Ref[Int]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
-    _ <- putStrLn(s"====== 404 ====== ${request.method} REQUEST ${request.protocol.value} =============")
-    _ <- putStrLn(s"uri : ${request.uri} ")
-    _ <- putStrLn("  ---------- HEADER ---------")
-    _ <- ZIO.foreach(request.headers.zipWithIndex)(hdr => console.putStrLn(s"   #${hdr._2} : ${hdr._1.toString}"))
-    _ <- putStrLn("  ---------------------------")
-    _ <- putStrLn(s"entity ${request.entity.toString} ")
-    _ <- putStrLn("========================================================")
+  val route404: HttpRequest => ZIO[ZEnv, Throwable, HttpResponse] = (request) => for {
+    _ <- logRequest(request)
     f <- ZIO.fromFuture { implicit ec =>
       Future.successful(HttpResponse(404, entity = "Unknown resource!"))
         .flatMap{

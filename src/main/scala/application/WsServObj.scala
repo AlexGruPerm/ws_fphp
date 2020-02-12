@@ -15,9 +15,11 @@ import io.circe.{Json, Printer}
 import zio.console.putStrLn
 import akka.http.scaladsl.model.HttpCharsets._
 import application.WsServObj.CommonTypes.IncConnSrvBind
+import zio.logging.{LogLevel, log}
 
 import scala.concurrent.Future
 import scala.language.postfixOps
+import logging.LoggerCommon._
 
 
 object WsServObj {
@@ -27,10 +29,12 @@ object WsServObj {
   /**
    *
    */
-  val cacheChecker: Ref[Int] => ZIO[ZEnv, Nothing, Unit] = cache =>
+  private val cacheChecker: Ref[Int] => ZIO[ZEnv, Nothing, Unit] = cache =>
     for {
-      currValue <- cache.get
-      _ <- putStrLn(s"cacheChecker state = $currValue")
+       cacheCurrentValue <- cache.get
+      _  <- zio.logging.locallyAnnotate(correlationId,"cache_checker"){
+        log(LogLevel.Debug)(s"cacheCurrentValue = $cacheCurrentValue")
+      }.provideSomeM(env)
       _ <- cache.update(_ + 1)
     } yield ()
 
@@ -43,23 +47,24 @@ object WsServObj {
    */
   val WsServer: Config => ZIO[ZEnv, Throwable, Unit] = conf => {
     import zio.duration._
-    /**
-     * .fork
-     * Returns an effect that forks this effect into its own separate fiber,
-     * returning the fiber immediately, without waiting for it to compute its
-     * value.
-     * .join
-     * Joins the fiber, which suspends the joining fiber until the result of the fiber has been determined.
-     */
     val wsRes = Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
         for {
           cache <- Ref.make(0)
-          _ <- putStrLn("[3]Call startRequestHandler from WsServer.")
+          cacheInitialValue <- cache.get
+
+          _  <- zio.logging.locallyAnnotate(correlationId,"wsserver"){
+            log(LogLevel.Info)(s"Before startRequestHandler. Cache created with $cacheInitialValue")
+          }.provideSomeM(env)
+
           fiber <- startRequestHandler(cache, conf, actorSystem).fork
           _ <- fiber.join
           _ <- cacheChecker(cache).repeat(Schedule.spaced(2.second))
-          _ <- putStrLn("[6]After startRequestHandler from WsServer.")
+
+          _  <- zio.logging.locallyAnnotate(correlationId,"wsserver"){
+            log(LogLevel.Info)("After startRequestHandler, end of WsServer.")
+          }.provideSomeM(env)
+
         } yield ()
     )
     /** examples:
@@ -69,9 +74,17 @@ object WsServObj {
     wsRes
   }
 
-  val serverSource: ActorSystem => ZIO[Any, Throwable, akka.stream.scaladsl.Source[Http.IncomingConnection, Future[ServerBinding]]] = actorSystem => Task(
-    Http(actorSystem).bind(interface = "127.0.0.1", port = 8080)
-  )
+  object CommonTypes {
+    type IncConnSrvBind = akka.stream.scaladsl.Source[IncomingConnection, Future[ServerBinding]]
+  }
+
+  val serverSource: (Config, ActorSystem) => ZIO[Any, Throwable, IncConnSrvBind] =
+    (conf, actorSystem) => for {
+      _  <- zio.logging.locallyAnnotate(correlationId,"server_source"){
+        log(LogLevel.Info)(s"Create Source[IncConnSrvBind] with ${conf.api.endpoint}:${conf.api.port}")
+      }.provideSomeM(env)
+      ss <- Task(Http(actorSystem).bind(interface = conf.api.endpoint, port = conf.api.port))
+    } yield ss
 
   import scala.io.Source
 
@@ -89,9 +102,7 @@ val currCacheValUIONew :UIO[Int] = cache.update(_ + 100)
 val currCacheValNew :Int = runtime.unsafeRun(currCacheValUIONew)
 log.info(s" After currCacheValNew = $currCacheValNew")
 */
- object CommonTypes {
-    type IncConnSrvBind = akka.stream.scaladsl.Source[IncomingConnection, Future[ServerBinding]]
-  }
+
 
 
   def reqHandlerM(actorSystem: ActorSystem, cache: Ref[Int])(request: HttpRequest): Future[HttpResponse] = {
@@ -99,7 +110,6 @@ log.info(s" After currCacheValNew = $currCacheValNew")
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
     implicit val executionContext = system.dispatcher
-    val log = Logging(system, "WsDb")
     import ReqResp._
 
     val rt = new DefaultRuntime {}
@@ -107,21 +117,21 @@ log.info(s" After currCacheValNew = $currCacheValNew")
     /**
       * unsafeRunToFuture
       */
-    val responseFuture: ZIO[ZEnv, Throwable, HttpResponse] = request match {
-      case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), _, _, _) =>
-        routPostTest(request, cache)
-      case request@HttpRequest(HttpMethods.GET, Uri.Path("/debug"), _, _, _) =>
-        routeGetDebug(request, cache)
-      case request@HttpRequest(HttpMethods.GET, Uri.Path("/favicon.ico"), _, _, _) =>
-        routeGetFavicon(request, cache)
-      case request: HttpRequest => {
-        request.discardEntityBytes()
-        route404(request, cache)
+    val responseFuture: ZIO[ZEnv, Throwable, HttpResponse] =
+      request match {
+        case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), _, _, _) =>
+          routPostTest(request, cache)
+        case request@HttpRequest(HttpMethods.GET, Uri.Path("/debug"), _, _, _) =>
+          routeGetDebug(request, cache)
+        case request@HttpRequest(HttpMethods.GET, Uri.Path("/favicon.ico"), _, _, _) =>
+          routeGetFavicon(request)
+        case request: HttpRequest => {
+          request.discardEntityBytes()
+          route404(request)
+        }
       }
-    }
 
     rt.unsafeRunToFuture(responseFuture)
-
   }
 
 
@@ -142,12 +152,15 @@ log.info(s" After currCacheValNew = $currCacheValNew")
     implicit val executionContext = system.dispatcher
     import akka.stream.scaladsl.Source
       for {
-        ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(actorSystem)
-
+        ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(conf,actorSystem)
+        _  <- zio.logging.locallyAnnotate(correlationId,"req-handler"){
+          log(LogLevel.Info)(s"ServerSource created")
+          }.provideSomeM(env)
+        /*
         currCacheValue <- cache.get
         _ <- putStrLn(s"startRequestHandler currCacheValue = $currCacheValue")
         _ <- cache.update(_ + 10)
-
+        */
         reqHandlerFinal :(HttpRequest => Future[HttpResponse]) <- Task(reqHandlerM(actorSystem, cache) _) // Curried version of reqHandlerM
 
         requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] = ZIO.fromFunction((r: HttpRequest) =>
@@ -158,9 +171,7 @@ log.info(s" After currCacheValNew = $currCacheValNew")
             conn => conn.handleWithAsyncHandler(r => new DefaultRuntime {}.unsafeRun(requestHandlerFunc.provide(r)))
           }
         )
-
         sourceWithServer <- serverWithReqHandler.provide(ss)
-
       } yield sourceWithServer
   }
 
