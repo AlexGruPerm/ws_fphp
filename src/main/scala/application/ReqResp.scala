@@ -81,7 +81,7 @@ object ReqResp {
       |""".stripMargin
 
 
-  val routPostTest: (HttpRequest,Ref[Int],LoggingAdapter) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache, log) => for {
+  val routPostTest: (HttpRequest,Ref[Int]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
       resJson <- Task{s"SimpleTestString ${request.uri}".asJson}
       _ <- putStrLn(s"================= ${request.method} REQUEST ${request.protocol.value} =============")
       _ <- putStrLn(s"uri : ${request.uri} ")
@@ -105,9 +105,9 @@ object ReqResp {
     } yield f
 
 
-  val routeGetDebug: (HttpRequest,Ref[Int],LoggingAdapter) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache, log) => for {
-      //strDebugForm <- Task{Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html")
-        strDebugForm <- Task{Source.fromFile("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html")
+  val routeGetDebug: (HttpRequest,Ref[Int]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
+          strDebugForm <- Task{Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html")
+        //strDebugForm <- Task{Source.fromFile("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html")
         .getLines.mkString.replace("req_json_text", reqJsonText)}
       _ <- putStrLn(s"================= ${request.method} REQUEST ${request.protocol.value} =============")
       _ <- putStrLn(s"uri : ${request.uri} ")
@@ -137,28 +137,23 @@ todo: remove
   import akka.http.impl._
   */
 
-  val routeGetFavicon: (HttpRequest,Ref[Int],LoggingAdapter) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache, log) => for {
+  val routeGetFavicon: (HttpRequest,Ref[Int]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
     _ <- putStrLn(s"================= ${request.method} REQUEST ${request.protocol.value} =============")
-    fl <- Task{new File("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/favicon.png")}
+    //icoFile <- Task{new File("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/favicon.png")}
+    icoFile <- Task{new File("C:\\ws_fphp\\src\\main\\resources\\favicon.png")}
     f <- ZIO.fromFuture { implicit ec =>
       Future.successful(
         HttpResponse(StatusCodes.OK, entity =
-          HttpEntity(
-            MediaTypes.`application/octet-stream`,
-            fl.length,
-            FileIO.fromPath(fl.toPath))
-          //HttpEntity(`image/x-icon`, HttpData(new File("favicon.ico")))
+          HttpEntity(MediaTypes.`application/octet-stream`, icoFile.length, FileIO.fromPath(icoFile.toPath))
         )
-        //HttpResponse(StatusCodes.OK, entity = HttpEntity(`text/html` withCharset `UTF-8`, ""))
-      )
-        .flatMap{
+      ).flatMap{
           result :HttpResponse => Future(result).map(_ => result)
         }
     }
   } yield f
 
 
-  val route404: (HttpRequest,Ref[Int],LoggingAdapter) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache, log) => for {
+  val route404: (HttpRequest,Ref[Int]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
     _ <- putStrLn(s"====== 404 ====== ${request.method} REQUEST ${request.protocol.value} =============")
     _ <- putStrLn(s"uri : ${request.uri} ")
     _ <- putStrLn("  ---------- HEADER ---------")

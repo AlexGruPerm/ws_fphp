@@ -109,14 +109,14 @@ log.info(s" After currCacheValNew = $currCacheValNew")
       */
     val responseFuture: ZIO[ZEnv, Throwable, HttpResponse] = request match {
       case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), _, _, _) =>
-        routPostTest(request, cache, log)
+        routPostTest(request, cache)
       case request@HttpRequest(HttpMethods.GET, Uri.Path("/debug"), _, _, _) =>
-        routeGetDebug(request, cache, log)
+        routeGetDebug(request, cache)
       case request@HttpRequest(HttpMethods.GET, Uri.Path("/favicon.ico"), _, _, _) =>
-        routeGetFavicon(request, cache, log)
+        routeGetFavicon(request, cache)
       case request: HttpRequest => {
         request.discardEntityBytes()
-        route404(request, cache, log)
+        route404(request, cache)
       }
     }
 
