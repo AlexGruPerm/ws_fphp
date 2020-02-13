@@ -16,7 +16,7 @@ import io.circe.syntax._
 import logging.LoggerCommon._
 import zio.console.putStrLn
 import zio.logging.{LogLevel, log}
-import zio.{IO, Ref, Schedule, Task, UIO, ZEnv, ZIO}
+import zio.{IO, Ref, Schedule, Task, UIO, URIO, ZEnv, ZIO}
 
 import scala.concurrent.Future
 import scala.io.{BufferedSource, Source}
@@ -87,6 +87,14 @@ object ReqResp {
     )
   }
 
+  /*
+  private val closeConnection: URIO[zio.Runtime[JdbcIO],Unit] =
+    for {
+     rtJdbc <- ZIO.environment[JdbcIO] // connJdbcIO.environment.connection.close()
+     _ = rtJdbc.connection.close()
+    } yield UIO.succeed(())
+  */
+
   /**
    * This is one of client handler.
    * Inside it opens 1-* database connections for parallel executing queries.
@@ -127,12 +135,27 @@ object ReqResp {
 
       httpResp <- Task{jdbcRuntime(dbCFG)}
         .fold(
+          succConn => {
+            //closeConnection.provide(succConn)
+            HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(failJson)))
+          },
+          failConn => {
+            //here we need execute effect that use jdbcRuntime for execute queries in db.
+            HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson)))
+          }
+        )
+
+
+      /*
+      httpResp <- Task{jdbcRuntime(dbCFG)}
+        .fold(
           _ => HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(failJson))),
           _ => {
             //here we need execute effect that use jdbcRuntime for execute queries in db.
             HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson)))
           }
         )
+      */
 
       resFromFuture <- ZIO.fromFuture { implicit ec => Future.successful(httpResp).flatMap{
         result: HttpResponse => Future(result).map(_ => result)
