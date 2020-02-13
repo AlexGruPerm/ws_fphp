@@ -1,6 +1,6 @@
 package application
 
-import java.io.File
+import java.io.{File, IOException}
 
 import akka.http.scaladsl.model.HttpCharsets._
 import akka.http.scaladsl.model.MediaTypes.{`application/json`, `text/html`}
@@ -11,10 +11,10 @@ import io.circe.syntax._
 import logging.LoggerCommon._
 import zio.console.putStrLn
 import zio.logging.{LogLevel, log}
-import zio.{Ref, Task, ZEnv, ZIO}
+import zio.{IO, Ref, Task, UIO, ZEnv, ZIO}
 
 import scala.concurrent.Future
-import scala.io.Source
+import scala.io.{BufferedSource, Source}
 import scala.language.postfixOps
 
 object ReqResp {
@@ -78,15 +78,18 @@ object ReqResp {
       }
     } yield f
 
+  private def openFile(s: String): IO[IOException, BufferedSource] =
+    IO.effect(Source.fromFile(s)).refineToOrDie[IOException]
 
+  private def closeFile(f: BufferedSource): UIO[Unit] =
+    UIO.unit
+
+  //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
   val routeGetDebug: (HttpRequest, Ref[Int]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
-    strDebugForm <- Task {
-      Source.fromFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html")
-        //strDebugForm <- Task{Source.fromFile("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html")
-        .getLines.mkString.replace("req_json_text", reqJsonText)
+    strDebugForm <- openFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").bracket(closeFile) { file =>
+      Task(file.getLines.mkString.replace("req_json_text", reqJsonText))
     }
     _ <- logRequest(request)
-
     cvb <- cache.get
     _ <- putStrLn(s"BEFORE(debug): cg=$cvb")
     _ <- cache.update(_ + 3)

@@ -21,6 +21,7 @@ object Main extends zio.App {
     else UIO.succeed(())
   } yield checkRes
 
+
   override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] =
     WsApp(args)
       .foldM(
@@ -35,6 +36,7 @@ object Main extends zio.App {
         }
       )
 
+
   private val WsApp: List[String] => ZIO[ZEnv, Throwable, Unit] = args =>
     for {
       _  <- zio.logging.locallyAnnotate(correlationId,"wsapp"){
@@ -46,7 +48,6 @@ object Main extends zio.App {
       res <- WsServObj.WsServer(cfg)
       _ <- log("Web service stopping").provideSomeM(env)
     } yield res
-
 
 }
 

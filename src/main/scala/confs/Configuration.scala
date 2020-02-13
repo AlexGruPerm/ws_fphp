@@ -8,16 +8,20 @@ import pureconfig.ConfigSource
 import pureconfig.error.ConfigReaderFailures
 import pureconfig.generic.auto._
 
-final case class Config(api: ApiConfig, dbConfig: DbConfig)
+final case class Config(api: ApiConfig, dbConfig: List[DbConfig])
 
 final case class ApiConfig(endpoint: String, port: Int)
 
-final case class DbConfig(dbtype: String,
-                          driver: String,
-                          url: String,
-                          numThreads: Int,
-                          username: String,
-                          password: String)
+final case class DbConfig(
+                           name: String,
+                           dbtype: String,
+                           driver: String,
+                           dbname: String,
+                           url: String,
+                           mode: String,
+                           username: String,
+                           password: String
+                         )
 
 trait Configuration extends Serializable {
   val config: Configuration.Service[Any]

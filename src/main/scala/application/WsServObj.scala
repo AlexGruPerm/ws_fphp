@@ -73,7 +73,8 @@ object WsServObj {
   val serverSource: (Config, ActorSystem) => ZIO[Any, Throwable, IncConnSrvBind] =
     (conf, actorSystem) => for {
       _  <- zio.logging.locallyAnnotate(correlationId,"server_source"){
-        log(LogLevel.Info)(s"Create Source[IncConnSrvBind] with ${conf.api.endpoint}:${conf.api.port}")
+        log(LogLevel.Info)(s"Create Source[IncConnSrvBind] with ${conf.api.endpoint}:${conf.api.port}") &&&
+          log(LogLevel.Info)(s" In input config are configured ${conf.dbConfig.size} databases.")
       }.provideSomeM(env)
       ss <- Task(Http(actorSystem).bind(interface = conf.api.endpoint, port = conf.api.port))
     } yield ss
