@@ -7,7 +7,7 @@ import akka.http.scaladsl._
 import akka.http.scaladsl.model.{HttpRequest, _}
 import akka.util.Timeout
 import application.WsServObj.CommonTypes.IncConnSrvBind
-import confs.Config
+import confs.{Config, DbConfig}
 import logging.LoggerCommon._
 import zio.logging.{LogLevel, log}
 import zio._
@@ -79,7 +79,8 @@ object WsServObj {
       ss <- Task(Http(actorSystem).bind(interface = conf.api.endpoint, port = conf.api.port))
     } yield ss
 
-  def reqHandlerM(actorSystem: ActorSystem, cache: Ref[Int])(request: HttpRequest): Future[HttpResponse] = {
+  def reqHandlerM(dbConfigList: List[DbConfig], actorSystem: ActorSystem, cache: Ref[Int])(request: HttpRequest):
+  Future[HttpResponse] = {
     implicit val system: ActorSystem = actorSystem
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
@@ -88,13 +89,15 @@ object WsServObj {
 
     val responseFuture: ZIO[ZEnv, Throwable, HttpResponse] =
       request match {
-        case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), _, _, _) => routPostTest(request, cache)
+        case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), _, _, _) =>
+          routPostTest(request, cache, dbConfigList)
         case request@HttpRequest(HttpMethods.GET, _, _, _, _) =>
           request match {
             case request@HttpRequest(_, Uri.Path("/debug"), _, _, _) => routeGetDebug(request, cache)
             case request@HttpRequest(_, Uri.Path("/favicon.ico"), _, _, _) => routeGetFavicon(request)
           }
-        case request: HttpRequest => {request.discardEntityBytes()
+        case request: HttpRequest => {
+          request.discardEntityBytes()
           route404(request)
         }
       }
@@ -126,7 +129,7 @@ object WsServObj {
           }.provideSomeM(env)
 
         // Curried version of reqHandlerM has type HttpRequest => Future[HttpResponse]
-        reqHandlerFinal <- Task(reqHandlerM(actorSystem, cache) _)
+        reqHandlerFinal <- Task(reqHandlerM(conf.dbConfig, actorSystem, cache) _)
 
         requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] = ZIO.fromFunction((r: HttpRequest) =>
           reqHandlerFinal(r))

@@ -18,7 +18,6 @@ final case class DbConfig(
                            driver: String,
                            dbname: String,
                            url: String,
-                           mode: String,
                            username: String,
                            password: String
                          )

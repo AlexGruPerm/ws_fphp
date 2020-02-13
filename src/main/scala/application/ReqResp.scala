@@ -1,11 +1,15 @@
 package application
 
 import java.io.{File, IOException}
+import java.sql.Connection
+import java.util.{NoSuchElementException, Properties}
 
 import akka.http.scaladsl.model.HttpCharsets._
 import akka.http.scaladsl.model.MediaTypes.{`application/json`, `text/html`}
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes, _}
 import akka.stream.scaladsl.FileIO
+import confs.{Config, DbConfig}
+import dbconn.JdbcIO
 import io.circe.Printer
 import io.circe.syntax._
 import logging.LoggerCommon._
@@ -21,23 +25,30 @@ object ReqResp {
 
   private val reqJsonText =
     """
-      |              {  "dicts": [
+      |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
+      |                "dicts": [
       |                {
+      |                  "db" : "db1_msk_gu",
       |                  "proc":"prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"
       |                },
       |                  {
+      |                    "db" : "db2_msk_gp",
       |                    "proc":"prm_salary.pkg_web_cons_rep_grbs_list(refcur => ?, p_user_id => 45224506)"
       |                  },
       |                {
+      |                  "db" : "db1_msk_gu",
       |                  "proc":"prm_salary.pkg_web_cons_rep_institution_list(refcur => ?, p_user_id => 45224506)"
       |                },
       |                {
+      |                  "db" : "db2_msk_gp",
       |                  "proc":"prm_salary.pkg_web_cons_rep_form_type_list(refcur => ?)"
       |                },
       |                {
+      |                  "db" : "db1_msk_gu",
       |                  "proc":"prm_salary.pkg_web_cons_rep_territory_list(refcur => ?)"
       |                },
       |                {
+      |                  "db" : "db2_msk_gp",
       |                  "proc":"prm_salary.pkg_web_cons_rep_okved_list(refcur => ?)"
       |                }
       |              ]
@@ -60,10 +71,54 @@ object ReqResp {
     }.provideSomeM(env)
   } yield ()
 
+  //search success ConfDb outside of this function,
+  private lazy val jdbcRuntime: DbConfig => zio.Runtime[JdbcIO] = dbconf => {
+    val props = new Properties()
+    props.setProperty("user", dbconf.username)
+    props.setProperty("password", dbconf.password)
+    zio.Runtime(new JdbcIO {
+      Class.forName(dbconf.driver)
+      //todo: maybe Properties instead of u,p
+      val connection: Connection = java.sql.DriverManager.getConnection(dbconf.url + dbconf.dbname, props)
+    }, zio.internal.PlatformLive.Default
+    )
+  }
 
-  val routPostTest: (HttpRequest,Ref[Int]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
+  /**
+   * This is one of client handler.
+   * Inside it opens 1-* database connections for parallel executing queries.
+   * Sometimes it can be Exception:
+   * org.postgresql.util.PSQLException: FATAL: remaining connection slots are reserved for
+   * non-replication superuser connection
+   * And we need catch it and return response json to client like this :
+   * {
+   *  "status" : "error",
+   *  "message" : "remaining connection slots are reserved for non-replication superuser connections",
+   *  "exception class" : "PSQLException"
+   * }
+  */
+  val routPostTest: (HttpRequest,Ref[Int],List[DbConfig]) => ZIO[ZEnv, Throwable, HttpResponse] =
+    (request, cache, dbConfigList) => for {
       resJson <- Task{s"SimpleTestString ${request.uri}".asJson}
       _ <- logRequest(request)
+
+      dbConnName :String = "db1_msk_gu"
+      dbCFG : DbConfig = dbConfigList.find(dbc => dbc.name == dbConnName)
+        .fold(
+          throw new NoSuchElementException(s"There is no this db connection name [$dbConnName] in config file."))(
+          s => s)
+
+      dbRT: zio.Runtime[JdbcIO] <- Task{jdbcRuntime(dbCFG)}
+
+      failJson =
+      """
+        |  {
+        |   "status" : "error",
+        |   "message" : "remaining connection slots are reserved for non-replication superuser connections",
+        |   "cause" : "Cause of exception",
+        |   "exception class" : "PSQLException"
+        |  }
+        """.asJson
 
       cvb <- cache.get
       _ <- putStrLn(s"BEFORE(test): cg=$cvb")
@@ -72,11 +127,15 @@ object ReqResp {
       _ <- putStrLn(s"AFTER(test): cg=$cva")
 
       f <- ZIO.fromFuture { implicit ec =>
-        Future.successful(HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson))))
-          .flatMap{result :HttpResponse => Future(result).map(_ => result)
+        Future.successful(
+          HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson))))
+          .flatMap { result: HttpResponse => Future(result).map(_ => result)
           }
       }
+
     } yield f
+
+
 
   private def openFile(s: String): IO[IOException, BufferedSource] =
     IO.effect(Source.fromFile(s)).refineToOrDie[IOException]

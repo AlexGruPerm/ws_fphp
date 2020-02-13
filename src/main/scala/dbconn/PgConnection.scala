@@ -4,10 +4,12 @@ import java.sql.{Connection, DriverManager, ResultSet, Statement}
 import java.util.Properties
 
 import confs.DbConfig
+import logging.LoggerCommon.{correlationId, env}
 import org.slf4j.LoggerFactory
-import zio.Task
+import zio.{Task, ZIO}
+import zio.logging.{LogLevel, log}
 
-case class pgSess(sess : Connection, pid : Int)
+case class pgSess(sess: Connection, pid: Int)
 
 /**
  * Info:
@@ -37,54 +39,62 @@ case class pgSess(sess : Connection, pid : Int)
 */
 
 trait jdbcSession {
-  val logger = LoggerFactory.getLogger(getClass.getName)
+  //val logger = LoggerFactory.getLogger(getClass.getName)
 
   /**
    * Return Connection to Postgres or Exception
-  */
-  def createPgSess: (Int, DbConfig) => Task[pgSess] = (iterNum, cp) =>
-    Task {
-      val props = new Properties()
-      props.setProperty("user",cp.username)
-      props.setProperty("password",cp.password)
-      val c :Connection = DriverManager.getConnection(cp.url, props)
-      c.setClientInfo("ApplicationName",s"PgResearch-$iterNum")
-      val stmt: Statement = c.createStatement
-      val rs: ResultSet = stmt.executeQuery("SELECT pg_backend_pid() as pg_backend_pid")
-      rs.next()
-      val pg_backend_pid :Int = rs.getInt("pg_backend_pid")
-      logger.info(s"User sesison pg_backend_pid = $pg_backend_pid")
-      pgSess(c,pg_backend_pid)
-    }
+   */
+  def createPgSess: DbConfig => Task[pgSess] = cp => {
+    val props = new Properties()
+    props.setProperty("user", cp.username)
+    props.setProperty("password", cp.password)
+    val c: Connection = DriverManager.getConnection(cp.url, props)
+    //c.setClientInfo("ApplicationName",s"PgResearch-$iterNum")
+    val stmt: Statement = c.createStatement
+    val rs: ResultSet = stmt.executeQuery("SELECT pg_backend_pid() as pg_backend_pid")
+    rs.next()
+    val pg_backend_pid: Int = rs.getInt("pg_backend_pid")
 
-}
+    for {
+      _ <- zio.logging.locallyAnnotate(correlationId, "create_pgsession") {
+        for {
+          _ <- log(LogLevel.Trace)(s"User session pg_backend_pid = $pg_backend_pid")
+        } yield ()
+      }.provideSomeM(env)
+      pgs <- Task(pgSess(c, pg_backend_pid))
+    } yield pgs
 
-/**
- *  Singleton object that keep db connection.
- *  ??? each connection-session has an object.
-*/
-class PgConnection extends jdbcSession {
+  }
 
-  //todo: read PgConnectProp properties single time from input json.
-  val sess : (Int,DbConfig) => Task[pgSess] = (iterNum,conProp) =>
-    createPgSess(iterNum,conProp)
+  /**
+   * Singleton object that keep db connection.
+   * ??? each connection-session has an object.
+   */
+  class PgConnection extends jdbcSession {
 
-  val getMaxConns : DbConfig => Task[PgSettings] = conProp =>
-  for {
-    pgSes :pgSess <- sess(0,conProp)
-    maxConn <- Task{
-      pgSes.sess.setAutoCommit(false)
-      //setting as MAXCONN, SOURCEFILE
-      val rs: ResultSet = pgSes.sess.createStatement.executeQuery(
-        """ SELECT *
-          | FROM   pg_settings
-          | WHERE  name = 'max_connections' """.stripMargin)
-      rs.next()
-      val maxConn :Int = rs.getInt("setting")
-      val srcConf :String = rs.getString("sourcefile")
-      PgSettings(maxConn,srcConf)
-    }
-  } yield maxConn
+    //todo: read PgConnectProp properties single time from input json.
+    val sess: DbConfig => Task[pgSess] = conProp =>
+      createPgSess(conProp)
+
+    //todo: remove this function later as unuseful.
+    val getMaxConns: DbConfig => Task[PgSettings] = conProp =>
+      for {
+        pgSes: pgSess <- sess(conProp)
+        maxConn <- Task {
+          pgSes.sess.setAutoCommit(false)
+          //setting as MAXCONN, SOURCEFILE
+          val rs: ResultSet = pgSes.sess.createStatement.executeQuery(
+            """ SELECT *
+              | FROM   pg_settings
+              | WHERE  name = 'max_connections' """.stripMargin)
+          rs.next()
+          val maxConn: Int = rs.getInt("setting")
+          val srcConf: String = rs.getString("sourcefile")
+          PgSettings(maxConn, srcConf)
+        }
+      } yield maxConn
+
+  }
 
 }
 
