@@ -9,17 +9,20 @@ import akka.http.scaladsl.model.MediaTypes.{`application/json`, `text/html`}
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes, _}
 import akka.stream.scaladsl.FileIO
 import confs.{Config, DbConfig}
+import data.DbErrorDesc
 import dbconn.JdbcIO
 import io.circe.Printer
 import io.circe.syntax._
 import logging.LoggerCommon._
 import zio.console.putStrLn
 import zio.logging.{LogLevel, log}
-import zio.{IO, Ref, Task, UIO, ZEnv, ZIO}
+import zio.{IO, Ref, Schedule, Task, UIO, ZEnv, ZIO}
 
 import scala.concurrent.Future
 import scala.io.{BufferedSource, Source}
 import scala.language.postfixOps
+import io.circe.generic.JsonCodec
+import io.circe.syntax._
 
 object ReqResp {
 
@@ -108,33 +111,34 @@ object ReqResp {
           throw new NoSuchElementException(s"There is no this db connection name [$dbConnName] in config file."))(
           s => s)
 
-      dbRT: zio.Runtime[JdbcIO] <- Task{jdbcRuntime(dbCFG)}
+      failJson = DbErrorDesc("error",
+        "remaining connection slots are reserved for non-replication superuser connections",
+        "Cause of exception",
+        "PSQLException"
+      ).asJson
 
-      failJson =
-      """
-        |  {
-        |   "status" : "error",
-        |   "message" : "remaining connection slots are reserved for non-replication superuser connections",
-        |   "cause" : "Cause of exception",
-        |   "exception class" : "PSQLException"
-        |  }
-        """.asJson
-
+/*
       cvb <- cache.get
       _ <- putStrLn(s"BEFORE(test): cg=$cvb")
       _ <- cache.update(_ + 100)
       cva <- cache.get
       _ <- putStrLn(s"AFTER(test): cg=$cva")
+*/
 
-      f <- ZIO.fromFuture { implicit ec =>
-        Future.successful(
-          HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson))))
-          .flatMap { result: HttpResponse => Future(result).map(_ => result)
+      httpResp <- Task{jdbcRuntime(dbCFG)}
+        .fold(
+          _ => HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(failJson))),
+          _ => {
+            //here we need execute effect that use jdbcRuntime for execute queries in db.
+            HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson)))
           }
-      }
+        )
 
-    } yield f
+      resFromFuture <- ZIO.fromFuture { implicit ec => Future.successful(httpResp).flatMap{
+        result: HttpResponse => Future(result).map(_ => result)
+      }}
 
+    } yield resFromFuture
 
 
   private def openFile(s: String): IO[IOException, BufferedSource] =

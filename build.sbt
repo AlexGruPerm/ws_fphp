@@ -27,6 +27,10 @@ resolvers ++= Seq(
   Resolver.bintrayRepo("websudos", "oss-releases")
 )
 
+//paradise for using circe annotations, f.e. @JsonCodec case class DbErrorDesc
+resolvers += Resolver.sonatypeRepo("releases")
+addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+
 libraryDependencies ++= Seq(
   "ch.qos.logback" % "logback-classic" % Versions.logbackVers,
   "com.typesafe" % "config" % Versions.typeSefeConf,
