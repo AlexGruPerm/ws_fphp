@@ -24,6 +24,15 @@ import scala.language.postfixOps
 import io.circe.generic.JsonCodec
 import io.circe.syntax._
 
+
+/**
+ * monitor sessions from wsfphp:
+ * select *
+ * from   pg_stat_activity p
+ * where  coalesce(p.usename,'-')='prm_salary'
+ *   and application_name='wsfphp'
+ *
+*/
 object ReqResp {
 
   private val reqJsonText =
@@ -74,8 +83,8 @@ object ReqResp {
     }.provideSomeM(env)
   } yield ()
 
-  //search success ConfDb outside of this function,
-  private lazy val jdbcRuntime: DbConfig => zio.Runtime[JdbcIO] = dbconf => {
+
+    private lazy val jdbcRuntime: DbConfig => zio.Runtime[JdbcIO] = dbconf => {
     val props = new Properties()
     props.setProperty("user", dbconf.username)
     props.setProperty("password", dbconf.password)
@@ -83,9 +92,17 @@ object ReqResp {
       Class.forName(dbconf.driver)
       //todo: maybe Properties instead of u,p
       val connection: Connection = java.sql.DriverManager.getConnection(dbconf.url + dbconf.dbname, props)
+      connection.setClientInfo("ApplicationName",s"wsfphp")
     }, zio.internal.PlatformLive.Default
     )
   }
+
+  /*
+  private lazy val jdbcCloseRuntime: zio.Runtime[JdbcIO] => ZIO[JdbcIO,Nothing,Unit] = zrt => for {
+    _ <- zrt.environment.closeConnection
+  } yield ()
+  */
+
 
   /*
   private val closeConnection: URIO[zio.Runtime[JdbcIO],Unit] =
@@ -94,6 +111,31 @@ object ReqResp {
      _ = rtJdbc.connection.close()
     } yield UIO.succeed(())
   */
+
+  val getEntries: ZIO[JdbcIO, Throwable, List[(String, String)]] =
+    JdbcIO.effect { c =>
+      val q = "SELECT NAME, MESSAGE FROM GUESTBOOK ORDER BY ID ASC"
+      val stmt = c.createStatement
+      val rs = stmt.executeQuery(q)
+
+      //fetch rows from opened cursor
+      def _entries(acc: List[(String, String)]): List[(String, String)] =
+        if (rs.next()) {
+          val entry = (rs.getString("NAME"), rs.getString("MESSAGE"))
+          _entries(entry :: acc)
+        } else {
+          stmt.close
+          acc
+        }
+
+      _entries(Nil)
+    }
+
+
+  val closeConn: ZIO[JdbcIO, Throwable, Unit] =
+    JdbcIO.effect { c =>
+      c.close()
+    }
 
   /**
    * This is one of client handler.
@@ -135,27 +177,14 @@ object ReqResp {
 
       httpResp <- Task{jdbcRuntime(dbCFG)}
         .fold(
+          failConn => HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(failJson))),
           succConn => {
-            //closeConnection.provide(succConn)
-            HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(failJson)))
-          },
-          failConn => {
             //here we need execute effect that use jdbcRuntime for execute queries in db.
+            //and then close explicitly close connection. todo: adbcp - don't close.
+            succConn.environment.closeConnection
             HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson)))
           }
         )
-
-
-      /*
-      httpResp <- Task{jdbcRuntime(dbCFG)}
-        .fold(
-          _ => HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(failJson))),
-          _ => {
-            //here we need execute effect that use jdbcRuntime for execute queries in db.
-            HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson)))
-          }
-        )
-      */
 
       resFromFuture <- ZIO.fromFuture { implicit ec => Future.successful(httpResp).flatMap{
         result: HttpResponse => Future(result).map(_ => result)

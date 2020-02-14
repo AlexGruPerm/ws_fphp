@@ -2,10 +2,11 @@ package dbconn
 
 import java.sql.{Connection, SQLException}
 
-import zio.ZIO
+import zio.{UIO, ZIO}
 
 trait JdbcIO {
   def connection: Connection
+  def closeConnection: Unit = connection.close()
 }
 
 object JdbcIO {
