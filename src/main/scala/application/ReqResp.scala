@@ -101,25 +101,6 @@ object ReqResp {
   }
 
 
-  val getEntries: ZIO[JdbcIO, Throwable, List[(String, String)]] =
-    JdbcIO.effect { c =>
-      val q = "SELECT NAME, MESSAGE FROM GUESTBOOK ORDER BY ID ASC"
-      val stmt = c.createStatement
-      val rs = stmt.executeQuery(q)
-
-      //fetch rows from opened cursor
-      def _entries(acc: List[(String, String)]): List[(String, String)] =
-        if (rs.next()) {
-          val entry = (rs.getString("NAME"), rs.getString("MESSAGE"))
-          _entries(entry :: acc)
-        } else {
-          stmt.close
-          acc
-        }
-
-      _entries(Nil)
-    }
-
   val getCursorData: ZIO[JdbcIO, Throwable, List[List[DictRow]]] =
     JdbcIO.effect { conn =>
       val procCallText = s"{call prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?) }"
@@ -133,10 +114,8 @@ object ReqResp {
       // (columnName, columnDataType)
       val columns: List[(String,String)] = (1 to pgrs.getMetaData.getColumnCount)
         .map(cnum => (pgrs.getMetaData.getColumnName(cnum),pgrs.getMetaData.getColumnTypeName(cnum))).toList
-
       //here we itarate over all rows (PgResultSet) and for each row iterate over our columns,
       // and extract cells data with getString.
-
       val resultSet: List[List[DictRow]] =
       Iterator.continually(pgrs).takeWhile(_.next()).map { rs =>
         columns.map { cname =>
@@ -146,25 +125,6 @@ object ReqResp {
 
       resultSet
     }
-
-/*
-  implicit val encodeDictRow: Encoder[DictRow] =
-    Encoder.forProduct2("colName", "colValue")(u =>
-      (u.name, u.value)
-    )
-
-
-  implicit val encodeListDictRow: Encoder[List[DictRow]] =
-    Encoder.forProduct1("row1")(u =>
-      u.map(r => r)
-    )
-
-  implicit val encodeListListDictRow: Encoder[List[List[DictRow]]] =
-    Encoder.forProduct1("row2")(u =>
-      u.map(r => r)
-    )
-  */
-
 
   /**
    * This is one of client handler.
@@ -179,20 +139,16 @@ object ReqResp {
    *  "exception class" : "PSQLException"
    * }
   */
-
   val routPostTest: (HttpRequest,Ref[Int],List[DbConfig]) => ZIO[ZEnv, Throwable, HttpResponse] =
     (request, cache, dbConfigList) => for {
-      resJson <- Task{s"SimpleTestString ${request.uri}".asJson}
       _ <- logRequest(request)
-
       /*
       cvb <- cache.get
       _ <- putStrLn(s"BEFORE(test): cg=$cvb")
       _ <- cache.update(_ + 100)
       cva <- cache.get
       _ <- putStrLn(s"AFTER(test): cg=$cva")
-*/
-
+     */
       dbConnName :String = "db1_msk_gu"
       dbCFG : DbConfig = dbConfigList.find(dbc => dbc.name == dbConnName)
         .fold(
@@ -213,37 +169,9 @@ object ReqResp {
             //and then close explicitly close connection. todo: adbcp - don't close.
             val cursorData = getCursorData
             val ds: List[List[DictRow]] = conn.unsafeRun(JdbcIO.transact(cursorData))
-
-            val msg = zio.logging.locallyAnnotate(correlationId,"cursor-data"){
-              log(LogLevel.Info)(s"ds = ${ds.take(2)}")
-            }.provideSomeM(env)
-            new DefaultRuntime {}.unsafeRun(msg)
-
-
-            val debugList :List[List[DictRow]] = ds.take(2)
-
-            val jsonOut :String  =
-  /*            List(
-                 List(DictRow("ind_ID","1"),DictRow("gu_id","2"),DictRow("territory","null")),
-                 List(DictRow("ind_ID","11"),DictRow("gu_id","21"),DictRow("territory","31"))
-              ).asJson.noSpaces
-*/          // debugList.take(2).asJson.noSpaces
-              Printer.spaces2/*noSpaces*/.print(debugList.take(2).asJson)
-
-/*
-            val jsonOut :String = List(
-              List(DictRow("ind_ID","10"),DictRow("gu_id","20"),DictRow("territory","30")),
-              List(DictRow("ind_ID","11"),DictRow("gu_id","21"),DictRow("territory","31"))
-            ).asJson.noSpaces
-*/
-
-            val msg2 = zio.logging.locallyAnnotate(correlationId,"cursor-data"){
-              log(LogLevel.Info)(s"jsonOut = $jsonOut")
-            }.provideSomeM(env)
-            new DefaultRuntime {}.unsafeRun(msg2)
-
-//conn.environment.closeConnection
-            HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, jsonOut))
+            // conn.environment.closeConnection --method transact close connection.
+            // noSpaces
+            HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.spaces2.print(ds.asJson)))
           }
         )
 
