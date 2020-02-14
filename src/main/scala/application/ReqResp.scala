@@ -1,7 +1,7 @@
 package application
 
 import java.io.{File, IOException}
-import java.sql.Connection
+import java.sql.{Connection, Types}
 import java.util.{NoSuchElementException, Properties}
 
 import akka.http.scaladsl.model.HttpCharsets._
@@ -9,20 +9,22 @@ import akka.http.scaladsl.model.MediaTypes.{`application/json`, `text/html`}
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes, _}
 import akka.stream.scaladsl.FileIO
 import confs.{Config, DbConfig}
-import data.DbErrorDesc
+import data.{DbErrorDesc, DictRow}
 import dbconn.JdbcIO
-import io.circe.Printer
+import io.circe.generic.JsonCodec
+import io.circe.{Encoder, Json, Printer}
 import io.circe.syntax._
 import logging.LoggerCommon._
 import zio.console.putStrLn
 import zio.logging.{LogLevel, log}
-import zio.{IO, Ref, Schedule, Task, UIO, URIO, ZEnv, ZIO}
+import zio.{DefaultRuntime, IO, Ref, Schedule, Task, UIO, URIO, ZEnv, ZIO}
+import io.circe.{Encoder, Printer}
 
 import scala.concurrent.Future
 import scala.io.{BufferedSource, Source}
 import scala.language.postfixOps
-import io.circe.generic.JsonCodec
 import io.circe.syntax._
+import org.postgresql.jdbc.PgResultSet
 
 
 /**
@@ -93,24 +95,11 @@ object ReqResp {
       //todo: maybe Properties instead of u,p
       val connection: Connection = java.sql.DriverManager.getConnection(dbconf.url + dbconf.dbname, props)
       connection.setClientInfo("ApplicationName",s"wsfphp")
+      connection.setAutoCommit(false)
     }, zio.internal.PlatformLive.Default
     )
   }
 
-  /*
-  private lazy val jdbcCloseRuntime: zio.Runtime[JdbcIO] => ZIO[JdbcIO,Nothing,Unit] = zrt => for {
-    _ <- zrt.environment.closeConnection
-  } yield ()
-  */
-
-
-  /*
-  private val closeConnection: URIO[zio.Runtime[JdbcIO],Unit] =
-    for {
-     rtJdbc <- ZIO.environment[JdbcIO] // connJdbcIO.environment.connection.close()
-     _ = rtJdbc.connection.close()
-    } yield UIO.succeed(())
-  */
 
   val getEntries: ZIO[JdbcIO, Throwable, List[(String, String)]] =
     JdbcIO.effect { c =>
@@ -131,11 +120,51 @@ object ReqResp {
       _entries(Nil)
     }
 
+  val getCursorData: ZIO[JdbcIO, Throwable, List[List[DictRow]]] =
+    JdbcIO.effect { conn =>
+      val procCallText = s"{call prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?) }"
+      val stmt = conn.prepareCall(procCallText)
+      stmt.setNull(1, Types.OTHER)
+      stmt.registerOutParameter(1, Types.OTHER)
+      stmt.execute()
+      // org.postgresql.jdbc.PgResultSet
+      val refCur = stmt.getObject(1)
+      val pgrs : PgResultSet = refCur.asInstanceOf[PgResultSet]
+      // (columnName, columnDataType)
+      val columns: List[(String,String)] = (1 to pgrs.getMetaData.getColumnCount)
+        .map(cnum => (pgrs.getMetaData.getColumnName(cnum),pgrs.getMetaData.getColumnTypeName(cnum))).toList
 
-  val closeConn: ZIO[JdbcIO, Throwable, Unit] =
-    JdbcIO.effect { c =>
-      c.close()
+      //here we itarate over all rows (PgResultSet) and for each row iterate over our columns,
+      // and extract cells data with getString.
+
+      val resultSet: List[List[DictRow]] =
+      Iterator.continually(pgrs).takeWhile(_.next()).map { rs =>
+        columns.map { cname =>
+          DictRow(cname._1, rs.getString(cname._1))
+        }
+      }.toList
+
+      resultSet
     }
+
+/*
+  implicit val encodeDictRow: Encoder[DictRow] =
+    Encoder.forProduct2("colName", "colValue")(u =>
+      (u.name, u.value)
+    )
+
+
+  implicit val encodeListDictRow: Encoder[List[DictRow]] =
+    Encoder.forProduct1("row1")(u =>
+      u.map(r => r)
+    )
+
+  implicit val encodeListListDictRow: Encoder[List[List[DictRow]]] =
+    Encoder.forProduct1("row2")(u =>
+      u.map(r => r)
+    )
+  */
+
 
   /**
    * This is one of client handler.
@@ -150,10 +179,19 @@ object ReqResp {
    *  "exception class" : "PSQLException"
    * }
   */
+
   val routPostTest: (HttpRequest,Ref[Int],List[DbConfig]) => ZIO[ZEnv, Throwable, HttpResponse] =
     (request, cache, dbConfigList) => for {
       resJson <- Task{s"SimpleTestString ${request.uri}".asJson}
       _ <- logRequest(request)
+
+      /*
+      cvb <- cache.get
+      _ <- putStrLn(s"BEFORE(test): cg=$cvb")
+      _ <- cache.update(_ + 100)
+      cva <- cache.get
+      _ <- putStrLn(s"AFTER(test): cg=$cva")
+*/
 
       dbConnName :String = "db1_msk_gu"
       dbCFG : DbConfig = dbConfigList.find(dbc => dbc.name == dbConnName)
@@ -167,22 +205,45 @@ object ReqResp {
         "PSQLException"
       ).asJson
 
-/*
-      cvb <- cache.get
-      _ <- putStrLn(s"BEFORE(test): cg=$cvb")
-      _ <- cache.update(_ + 100)
-      cva <- cache.get
-      _ <- putStrLn(s"AFTER(test): cg=$cva")
-*/
-
       httpResp <- Task{jdbcRuntime(dbCFG)}
         .fold(
           failConn => HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(failJson))),
-          succConn => {
+          conn => {
             //here we need execute effect that use jdbcRuntime for execute queries in db.
             //and then close explicitly close connection. todo: adbcp - don't close.
-            succConn.environment.closeConnection
-            HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(resJson)))
+            val cursorData = getCursorData
+            val ds: List[List[DictRow]] = conn.unsafeRun(JdbcIO.transact(cursorData))
+
+            val msg = zio.logging.locallyAnnotate(correlationId,"cursor-data"){
+              log(LogLevel.Info)(s"ds = ${ds.take(2)}")
+            }.provideSomeM(env)
+            new DefaultRuntime {}.unsafeRun(msg)
+
+
+            val debugList :List[List[DictRow]] = ds.take(2)
+
+            val jsonOut :String  =
+  /*            List(
+                 List(DictRow("ind_ID","1"),DictRow("gu_id","2"),DictRow("territory","null")),
+                 List(DictRow("ind_ID","11"),DictRow("gu_id","21"),DictRow("territory","31"))
+              ).asJson.noSpaces
+*/          // debugList.take(2).asJson.noSpaces
+              Printer.spaces2/*noSpaces*/.print(debugList.take(2).asJson)
+
+/*
+            val jsonOut :String = List(
+              List(DictRow("ind_ID","10"),DictRow("gu_id","20"),DictRow("territory","30")),
+              List(DictRow("ind_ID","11"),DictRow("gu_id","21"),DictRow("territory","31"))
+            ).asJson.noSpaces
+*/
+
+            val msg2 = zio.logging.locallyAnnotate(correlationId,"cursor-data"){
+              log(LogLevel.Info)(s"jsonOut = $jsonOut")
+            }.provideSomeM(env)
+            new DefaultRuntime {}.unsafeRun(msg2)
+
+//conn.environment.closeConnection
+            HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, jsonOut))
           }
         )
 

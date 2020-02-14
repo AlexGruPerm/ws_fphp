@@ -41,6 +41,7 @@ libraryDependencies ++= Seq(
   "com.github.pureconfig" %% "pureconfig" % Versions.zioPureConf,
   "org.apache.commons" % "commons-dbcp2" % Versions.dbcp2Vers
 )
+//  "org.apache.commons" % "commons-dbcp2" % Versions.dbcp2Vers
 
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-actor" % Versions.akka,
