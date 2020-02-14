@@ -4,6 +4,7 @@ import java.io.{File, IOException}
 import java.sql.{Connection, Types}
 import java.util.{NoSuchElementException, Properties}
 
+import akka.http.scaladsl.coding.Gzip
 import akka.http.scaladsl.model.HttpCharsets._
 import akka.http.scaladsl.model.MediaTypes.{`application/json`, `text/html`}
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes, _}
@@ -139,6 +140,10 @@ object ReqResp {
    *  "exception class" : "PSQLException"
    * }
   */
+  import java.util.Base64
+  import java.io.{ByteArrayOutputStream, ByteArrayInputStream}
+  import java.util.zip.{GZIPOutputStream, GZIPInputStream}
+  import akka.util._
   val routPostTest: (HttpRequest,Ref[Int],List[DbConfig]) => ZIO[ZEnv, Throwable, HttpResponse] =
     (request, cache, dbConfigList) => for {
       _ <- logRequest(request)
@@ -171,9 +176,32 @@ object ReqResp {
             val ds: List[List[DictRow]] = conn.unsafeRun(JdbcIO.transact(cursorData))
             // conn.environment.closeConnection --method transact close connection.
             // noSpaces
-            HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.spaces2.print(ds.asJson)))
+            val jsonString :String = Printer.spaces2.print(ds.asJson)
+            //val gzipDecodeJson :Array[Byte] =Base64.getDecoder.decode(jsonString)
+            //************************************************************************
+            /*
+            val bos = new ByteArrayOutputStream(jsonString.length)
+            val gzip = new GZIPOutputStream(bos)
+            gzip.write(jsonString.getBytes("UTF-8"))
+            gzip.close()
+            val compressed = bos.toByteArray
+            bos.close()
+            */
+            //************************************************************************
+            HttpResponse(StatusCodes.OK, entity =
+              HttpEntity(`application/json`
+              .withParams(Map("charset" -> "utf-8")), jsonString
+            )
+              /*
+                HttpEntity.Strict(//MediaTypes.`application/octet-stream`,
+                  `application/json`
+                    .withParams(Map("Content-Encoding" -> "gzip")),//Map("charset" -> "utf-8",
+                  ByteString(compressed))
+              */
+            )
           }
         )
+
 
       resFromFuture <- ZIO.fromFuture { implicit ec => Future.successful(httpResp).flatMap{
         result: HttpResponse => Future(result).map(_ => result)
