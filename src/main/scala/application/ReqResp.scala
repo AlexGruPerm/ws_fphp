@@ -182,29 +182,16 @@ object ReqResp {
             val cursorData = getCursorData
             val ds: List[List[DictRow]] = conn.unsafeRun(JdbcIO.transact(cursorData))
             // conn.environment.closeConnection --method transact close connection.
-            // noSpaces
-            val jsonString :String = Printer.spaces2.print(ds.asJson)
-
+            val jsonString :String = Printer.spaces2.print(ds.asJson)// noSpaces
             val contentEncoding :HttpHeader = `Content-Encoding`(HttpEncodings.gzip) //`Content-Encoding`(gzip)
-
             HttpResponse(StatusCodes.OK, entity =
               HttpEntity(`application/json`
-                .withParams(Map("charset" -> "UTF-8", "Content-Encoding" -> "gzip")), compress(jsonString,Gzip)
+                .withParams(Map("charset" -> "UTF-8")), compress(jsonString,Gzip)
               )
             ).addHeader(contentEncoding)
-
-              /*
-             HttpResponse(StatusCodes.OK, entity =
-              HttpEntity(`application/json`
-              .withParams(Map("charset" -> "UTF-8")), jsonString
-            )
-              */
-
-            //.addHeader(AcceptEncoding.create(HttpEncodings.gzip)) - akka.actor.ActorSystemImpl HTTP header 'Accept-Encoding: gzip' is not allowed in responses
-
           }
         )
-//
+
 
       resFromFuture <- ZIO.fromFuture { implicit ec => Future.successful(httpResp).flatMap{
         result: HttpResponse => Future(result).map(_ => result)
