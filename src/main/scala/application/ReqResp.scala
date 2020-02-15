@@ -4,11 +4,15 @@ import java.io.{File, IOException}
 import java.sql.{Connection, Types}
 import java.util.{NoSuchElementException, Properties}
 
+import akka.http.javadsl.model.headers.AcceptEncoding
 import akka.http.scaladsl.coding.Gzip
 import akka.http.scaladsl.model.HttpCharsets._
 import akka.http.scaladsl.model.MediaTypes.{`application/json`, `text/html`}
+import akka.http.scaladsl.model.TransferEncodings.gzip
+import akka.http.scaladsl.model.headers.`Content-Encoding`
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes, _}
 import akka.stream.scaladsl.FileIO
+import akka.util.ByteString
 import confs.{Config, DbConfig}
 import data.{DbErrorDesc, DictRow}
 import dbconn.JdbcIO
@@ -140,10 +144,13 @@ object ReqResp {
    *  "exception class" : "PSQLException"
    * }
   */
-  import java.util.Base64
-  import java.io.{ByteArrayOutputStream, ByteArrayInputStream}
-  import java.util.zip.{GZIPOutputStream, GZIPInputStream}
-  import akka.util._
+  import akka.http.scaladsl.coding.{Encoder, Gzip }
+  import akka.http.scaladsl.model._, headers.HttpEncodings
+
+  private def compress(input: String, encoder: Encoder) :ByteString =
+    encoder.encode(ByteString(input))
+
+
   val routPostTest: (HttpRequest,Ref[Int],List[DbConfig]) => ZIO[ZEnv, Throwable, HttpResponse] =
     (request, cache, dbConfigList) => for {
       _ <- logRequest(request)
@@ -177,31 +184,27 @@ object ReqResp {
             // conn.environment.closeConnection --method transact close connection.
             // noSpaces
             val jsonString :String = Printer.spaces2.print(ds.asJson)
-            //val gzipDecodeJson :Array[Byte] =Base64.getDecoder.decode(jsonString)
-            //************************************************************************
-            /*
-            val bos = new ByteArrayOutputStream(jsonString.length)
-            val gzip = new GZIPOutputStream(bos)
-            gzip.write(jsonString.getBytes("UTF-8"))
-            gzip.close()
-            val compressed = bos.toByteArray
-            bos.close()
-            */
-            //************************************************************************
+
+            val contentEncoding :HttpHeader = `Content-Encoding`(HttpEncodings.gzip) //`Content-Encoding`(gzip)
+
             HttpResponse(StatusCodes.OK, entity =
               HttpEntity(`application/json`
-              .withParams(Map("charset" -> "utf-8")), jsonString
-            )
+                .withParams(Map("charset" -> "UTF-8", "Content-Encoding" -> "gzip")), compress(jsonString,Gzip)
+              )
+            ).addHeader(contentEncoding)
+
               /*
-                HttpEntity.Strict(//MediaTypes.`application/octet-stream`,
-                  `application/json`
-                    .withParams(Map("Content-Encoding" -> "gzip")),//Map("charset" -> "utf-8",
-                  ByteString(compressed))
-              */
+             HttpResponse(StatusCodes.OK, entity =
+              HttpEntity(`application/json`
+              .withParams(Map("charset" -> "UTF-8")), jsonString
             )
+              */
+
+            //.addHeader(AcceptEncoding.create(HttpEncodings.gzip)) - akka.actor.ActorSystemImpl HTTP header 'Accept-Encoding: gzip' is not allowed in responses
+
           }
         )
-
+//
 
       resFromFuture <- ZIO.fromFuture { implicit ec => Future.successful(httpResp).flatMap{
         result: HttpResponse => Future(result).map(_ => result)
