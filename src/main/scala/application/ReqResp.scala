@@ -188,7 +188,7 @@ object ReqResp {
               HttpEntity(`application/json`
                 .withParams(Map("charset" -> "UTF-8")), compress(jsonString,Gzip)
               )
-            ).addHeader(contentEncoding)
+            ).addHeader(`Content-Encoding`(HttpEncodings.gzip))
           }
         )
 
