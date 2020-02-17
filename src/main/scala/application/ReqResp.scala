@@ -124,29 +124,23 @@ object ReqResp {
   }
 
 
-  val getCursorData: ZIO[JdbcIO, Throwable, List[List[DictRow]]] =
+  val getCursorData: Dict => ZIO[JdbcIO, Throwable, List[List[DictRow]]] = dict =>
     JdbcIO.effect { conn =>
-      val procCallText = s"{call prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?) }"
-      val stmt = conn.prepareCall(procCallText)
+      val stmt = conn.prepareCall(s"{call ${dict.proc} }")
       stmt.setNull(1, Types.OTHER)
       stmt.registerOutParameter(1, Types.OTHER)
       stmt.execute()
       // org.postgresql.jdbc.PgResultSet
-      val refCur = stmt.getObject(1)
-      val pgrs : PgResultSet = refCur.asInstanceOf[PgResultSet]
-      // (columnName, columnDataType)
+      //val refCur = stmt.getObject(1)
+      val pgrs : PgResultSet = stmt.getObject(1).asInstanceOf[PgResultSet]
       val columns: List[(String,String)] = (1 to pgrs.getMetaData.getColumnCount)
         .map(cnum => (pgrs.getMetaData.getColumnName(cnum),pgrs.getMetaData.getColumnTypeName(cnum))).toList
-      //here we itarate over all rows (PgResultSet) and for each row iterate over our columns,
+      // here we itarate over all rows (PgResultSet) and for each row iterate over our columns,
       // and extract cells data with getString.
-      val resultSet: List[List[DictRow]] =
-      Iterator.continually(pgrs).takeWhile(_.next()).map { rs =>
-        columns.map { cname =>
-          DictRow(cname._1, rs.getString(cname._1))
-        }
+      //List[List[DictRow]]
+      Iterator.continually(pgrs).takeWhile(_.next()).map {rs =>
+        columns.map(cname => DictRow(cname._1, rs.getString(cname._1)))
       }.toList
-
-      resultSet
     }
 
   /**
@@ -218,6 +212,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
     "PSQLException"
   ).asJson
 
+
   val routeDicts: (HttpRequest, Ref[Int], List[DbConfig], Future[String]) => ZIO[ZEnv, Throwable, HttpResponse] =
     (request, cache, dbConfigList ,reqEntity) => for {
       _ <- logRequest(request)
@@ -236,11 +231,10 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
           conn => {
             //here we need execute effect that use jdbcRuntime for execute queries in db.
             //and then close explicitly close connection. todo: adbcp - don't close.
-            val cursorData = getCursorData
+            val cursorData = getCursorData(Dict("db1_msk_gu","prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"))
             val ds: List[List[DictRow]] = conn.unsafeRun(JdbcIO.transact(cursorData))
-            // conn.environment.closeConnection --method transact close connection.
+            // conn.environment.closeConnection -- method transact close connection.
             val jsonString :String = Printer.spaces2.print(ds.asJson)// noSpaces
-            val contentEncoding :HttpHeader = `Content-Encoding`(HttpEncodings.gzip) //`Content-Encoding`(gzip)
             HttpResponse(StatusCodes.OK, entity =
               HttpEntity(`application/json`
                 .withParams(Map("charset" -> "UTF-8")), compress(jsonString,Gzip)
