@@ -51,26 +51,32 @@ object ReqResp {
       |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
       |                "dicts": [
       |                {
+      |                  "name" : "period",
       |                  "db" : "db1_msk_gu",
-      |                  "proc":"prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"
+      |                  "proc" : "prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"
       |                },
       |                  {
+      |                    "name" : "oiv",
       |                    "db" : "db2_msk_gp",
-      |                    "proc":"prm_salary.pkg_web_cons_rep_grbs_list(refcur => ?, p_user_id => 45224506)"
+      |                    "proc" : "prm_salary.pkg_web_cons_rep_grbs_list(refcur => ?, p_user_id => 45224506)"
       |                  },
       |                {
+      |                 "name" : "institution",
       |                  "db" : "db1_msk_gu",
-      |                  "proc":"prm_salary.pkg_web_cons_rep_institution_list(refcur => ?, p_user_id => 45224506)"
+      |                  "proc" : "prm_salary.pkg_web_cons_rep_institution_list(refcur => ?, p_user_id => 45224506)"
       |                },
       |                {
+      |                  "name" : "industry_class",
       |                  "db" : "db2_msk_gp",
       |                  "proc":"prm_salary.pkg_web_cons_rep_form_type_list(refcur => ?)"
       |                },
       |                {
+      |                  "name" : "territory",
       |                  "db" : "db1_msk_gu",
       |                  "proc":"prm_salary.pkg_web_cons_rep_territory_list(refcur => ?)"
       |                },
       |                {
+      |                  "name" : "okfs",
       |                  "db" : "db2_msk_gp",
       |                  "proc":"prm_salary.pkg_web_cons_rep_okved_list(refcur => ?)"
       |                }
@@ -231,7 +237,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
           conn => {
             //here we need execute effect that use jdbcRuntime for execute queries in db.
             //and then close explicitly close connection. todo: adbcp - don't close.
-            val cursorData = getCursorData(Dict("db1_msk_gu","prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"))
+            val cursorData = getCursorData(Dict("periods","db1_msk_gu","prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"))
             val ds: List[List[DictRow]] = conn.unsafeRun(JdbcIO.transact(cursorData))
             // conn.environment.closeConnection -- method transact close connection.
             val jsonString :String = Printer.spaces2.print(ds.asJson)// noSpaces

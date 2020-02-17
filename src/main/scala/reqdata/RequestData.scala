@@ -11,7 +11,7 @@ import io.circe.generic.JsonCodec
  *
 */
 @JsonCodec
-case class Dict(db:String, proc: String)
+case class Dict(name: String, db:String, proc: String)
 
 /**
  * for all dicts requested and additional information.
