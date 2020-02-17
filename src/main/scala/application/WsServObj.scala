@@ -83,14 +83,18 @@ object WsServObj {
   Future[HttpResponse] = {
     implicit val system: ActorSystem = actorSystem
     import scala.concurrent.duration._
+    import akka.http.scaladsl.unmarshalling.Unmarshal
     implicit val timeout: Timeout = Timeout(10 seconds)
     implicit val executionContext: ExecutionContextExecutor = system.dispatcher
     import ReqResp._
 
     val responseFuture: ZIO[ZEnv, Throwable, HttpResponse] =
       request match {
-        case request@HttpRequest(HttpMethods.POST, Uri.Path("/test"), _, _, _) =>
-          routPostTest(request, cache, dbConfigList)
+        case request@HttpRequest(HttpMethods.POST, Uri.Path("/dicts"), _, _, _) =>
+      {
+        val reqEntityString :Future[String] = Unmarshal(request.entity).to[String]
+        routeDicts(request, cache, dbConfigList, reqEntityString)
+      }
         case request@HttpRequest(HttpMethods.GET, _, _, _, _) =>
           request match {
             case request@HttpRequest(_, Uri.Path("/debug"), _, _, _) => routeGetDebug(request, cache)

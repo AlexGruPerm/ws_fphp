@@ -44,9 +44,10 @@
 
             function funcOnClickSendRequestButton() {
               console.log("Send request");
-                var postRqDataJson = document.getElementById("rq-json").innerHTML;
-                console.log(postRqDataJson);
-                    postAjax('/test', postRqDataJson, function(data){
+                var postRqDataJson = document.getElementById("rq-json").innerText;
+                var data = JSON.parse(postRqDataJson);
+                console.log(data);
+                    postAjax('/dicts', data, function(data){
                       document.getElementById("rs-json").innerHTML = data;
                     });
               }

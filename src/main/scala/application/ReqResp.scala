@@ -11,25 +11,29 @@ import akka.http.scaladsl.model.MediaTypes.{`application/json`, `text/html`}
 import akka.http.scaladsl.model.TransferEncodings.gzip
 import akka.http.scaladsl.model.headers.`Content-Encoding`
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes, _}
+import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
 import confs.{Config, DbConfig}
 import data.{DbErrorDesc, DictRow}
 import dbconn.JdbcIO
 import io.circe.generic.JsonCodec
-import io.circe.{Encoder, Json, Printer}
+import io.circe.parser.parse
+import io.circe.{Decoder, Encoder, Json, Printer}
 import io.circe.syntax._
 import logging.LoggerCommon._
 import zio.console.putStrLn
 import zio.logging.{LogLevel, log}
 import zio.{DefaultRuntime, IO, Ref, Schedule, Task, UIO, URIO, ZEnv, ZIO}
-import io.circe.{Encoder, Printer}
 
-import scala.concurrent.Future
+import scala.concurrent.{Await, Future}
 import scala.io.{BufferedSource, Source}
 import scala.language.postfixOps
 import io.circe.syntax._
 import org.postgresql.jdbc.PgResultSet
+import reqdata.{Dict, ReqParseException, RequestData}
+
+import scala.util.{Failure, Success, Try}
 
 
 /**
@@ -91,6 +95,20 @@ object ReqResp {
   } yield ()
 
 
+  val logReqData : Task[RequestData] => Task[Unit] = reqData => for {
+    rd <- reqData
+    _  <- zio.logging.locallyAnnotate(correlationId,"log_reqdata"){
+      for {
+        _ <- log(LogLevel.Trace)("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+        _ <- log(LogLevel.Trace)(s"session_id = ${rd.user_session}")
+        _ <- URIO.foreach(rd.dicts)(d => log(LogLevel.Trace)(s"dict = ${d.db} - ${d.proc}"))
+        _ <- log(LogLevel.Trace)("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+      } yield ()
+    }.provideSomeM(env)
+  } yield ()
+
+
+
     private lazy val jdbcRuntime: DbConfig => zio.Runtime[JdbcIO] = dbconf => {
     val props = new Properties()
     props.setProperty("user", dbconf.username)
@@ -150,28 +168,67 @@ object ReqResp {
   private def compress(input: String, encoder: Encoder) :ByteString =
     encoder.encode(ByteString(input))
 
+/*
+  implicit val decoderRequestData: Decoder[RequestData] = Decoder.instance { h =>
+    for {
+      userSession <- h.get[String]("user_session")
+      dicts <- h.get[Seq[Dict]]("dicts")
+    } yield RequestData(userSession,dicts)
+  }
 
-  val routPostTest: (HttpRequest,Ref[Int],List[DbConfig]) => ZIO[ZEnv, Throwable, HttpResponse] =
-    (request, cache, dbConfigList) => for {
+  implicit val decoderDict: Decoder[Dict] = Decoder.instance { h =>
+    for {
+      db <- h.get[String]("db")
+      proc <- h.get[String]("proc")
+    } yield Dict(db,proc)
+  }
+  */
+
+  import io.circe.generic.auto._, io.circe.syntax._
+  import scala.concurrent.duration._
+  private val parseRequestData: Future[String] => Task[RequestData] = futString => {
+    val strRequest: String  = Await.result(futString, 1 second)
+    parse(strRequest) match {
+      case Left (failure) => Task.fail (
+        ReqParseException("Error code[001] Invalid json in request", failure.getCause)
+        //new Exception (s"Invalid json in request, [code 001]. $failure")
+      )
+      case Right (json) => json.as[RequestData].swap
+      match {
+        case   Left(sq) => Task.succeed(sq)
+        case   Right(failure) =>  Task.fail (
+          ReqParseException("Error code[002] Invalid json in request", failure.getCause)
+          //new Exception (s"Invalid json in request, [code 002]. $failure")
+        )
+      }
+      }
+    }
+
+  /*
+cvb <- cache.get
+_ <- putStrLn(s"BEFORE(test): cg=$cvb")
+_ <- cache.update(_ + 100)
+cva <- cache.get
+_ <- putStrLn(s"AFTER(test): cg=$cva")
+*/
+
+  private val failJson = DbErrorDesc("error",
+    "remaining connection slots are reserved for non-replication superuser connections",
+    "Cause of exception",
+    "PSQLException"
+  ).asJson
+
+  val routeDicts: (HttpRequest, Ref[Int], List[DbConfig], Future[String]) => ZIO[ZEnv, Throwable, HttpResponse] =
+    (request, cache, dbConfigList ,reqEntity) => for {
       _ <- logRequest(request)
-      /*
-      cvb <- cache.get
-      _ <- putStrLn(s"BEFORE(test): cg=$cvb")
-      _ <- cache.update(_ + 100)
-      cva <- cache.get
-      _ <- putStrLn(s"AFTER(test): cg=$cva")
-     */
+     reqJson = parseRequestData(reqEntity)
+     _ <- logReqData(reqJson)
+
       dbConnName :String = "db1_msk_gu"
       dbCFG : DbConfig = dbConfigList.find(dbc => dbc.name == dbConnName)
         .fold(
           throw new NoSuchElementException(s"There is no this db connection name [$dbConnName] in config file."))(
           s => s)
-
-      failJson = DbErrorDesc("error",
-        "remaining connection slots are reserved for non-replication superuser connections",
-        "Cause of exception",
-        "PSQLException"
-      ).asJson
 
       httpResp <- Task{jdbcRuntime(dbCFG)}
         .fold(
@@ -191,7 +248,6 @@ object ReqResp {
             ).addHeader(`Content-Encoding`(HttpEncodings.gzip))
           }
         )
-
 
       resFromFuture <- ZIO.fromFuture { implicit ec => Future.successful(httpResp).flatMap{
         result: HttpResponse => Future(result).map(_ => result)

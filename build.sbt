@@ -58,7 +58,6 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-literal"
 ).map(_ % Versions.circeVers)
 
-
 assemblyMergeStrategy in assembly := {
   case x if x.contains("io.netty.versions.properties") => MergeStrategy.discard
   case x =>
