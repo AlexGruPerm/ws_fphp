@@ -14,6 +14,7 @@ object DbExecutor {
   ).asJson
 
   //each dict as Json result has a name f.e. "name" : "period"
+
   /*
  val execProcGetCursorData : (DbConfig,Dict) => = (conf, dict) => {
 

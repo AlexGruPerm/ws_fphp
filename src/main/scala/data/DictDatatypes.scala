@@ -22,3 +22,7 @@ object DictRow {
    def apply(name: String, value: String): DictRow =
     new DictRow(name, if (value==null) "null" else value)
 }
+
+@JsonCodec
+case class DictDataRows(name:String, durationMs: Long, rows : List[List[DictRow]])
+

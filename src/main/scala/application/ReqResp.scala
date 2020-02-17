@@ -15,7 +15,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
 import confs.{Config, DbConfig}
-import data.{DbErrorDesc, DictRow}
+import data.{DbErrorDesc, DictDataRows, DictRow}
 import dbconn.JdbcIO
 import io.circe.generic.JsonCodec
 import io.circe.parser.parse
@@ -130,7 +130,7 @@ object ReqResp {
   }
 
 
-  val getCursorData: Dict => ZIO[JdbcIO, Throwable, List[List[DictRow]]] = dict =>
+  val getCursorData: Dict => ZIO[JdbcIO, Throwable, DictDataRows/*List[List[DictRow]]*/] = dict =>
     JdbcIO.effect { conn =>
       val stmt = conn.prepareCall(s"{call ${dict.proc} }")
       stmt.setNull(1, Types.OTHER)
@@ -144,9 +144,13 @@ object ReqResp {
       // here we itarate over all rows (PgResultSet) and for each row iterate over our columns,
       // and extract cells data with getString.
       //List[List[DictRow]]
-      Iterator.continually(pgrs).takeWhile(_.next()).map {rs =>
-        columns.map(cname => DictRow(cname._1, rs.getString(cname._1)))
-      }.toList
+      DictDataRows(
+        dict.name,
+        0L,
+        Iterator.continually(pgrs).takeWhile(_.next()).map { rs =>
+          columns.map(cname => DictRow(cname._1, rs.getString(cname._1)))
+        }.toList
+      )
     }
 
   /**
@@ -238,7 +242,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
             //here we need execute effect that use jdbcRuntime for execute queries in db.
             //and then close explicitly close connection. todo: adbcp - don't close.
             val cursorData = getCursorData(Dict("periods","db1_msk_gu","prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"))
-            val ds: List[List[DictRow]] = conn.unsafeRun(JdbcIO.transact(cursorData))
+            val ds: DictDataRows/*List[List[DictRow]]*/ = conn.unsafeRun(JdbcIO.transact(cursorData))
             // conn.environment.closeConnection -- method transact close connection.
             val jsonString :String = Printer.spaces2.print(ds.asJson)// noSpaces
             HttpResponse(StatusCodes.OK, entity =
