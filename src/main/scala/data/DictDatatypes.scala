@@ -1,6 +1,7 @@
 package data
 
 import io.circe.generic.JsonCodec
+import io.circe.generic.auto._, io.circe.syntax._
 
 @JsonCodec
 case class DictRow(name: String, value: String)

@@ -16,8 +16,8 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
 import confs.{Config, DbConfig}
-import data.{DbErrorDesc, DictDataRows, DictRow}
-import dbconn.{JdbcIO}
+import data.{DbErrorDesc, DictDataRows, DictRow, DictsDataAccum}
+import dbconn.{DbExecutor, JdbcIO}
 import io.circe.generic.JsonCodec
 import io.circe.parser.parse
 import io.circe.{Decoder, Encoder, Json, Printer}
@@ -34,7 +34,7 @@ import io.circe.syntax._
 import org.postgresql.jdbc.PgResultSet
 import reqdata.{Dict, NoConfigureDbInRequest, ReqParseException, RequestData}
 import zio.clock.Clock
-
+import io.circe.generic.JsonCodec
 import scala.util.{Failure, Success, Try}
 
 
@@ -116,7 +116,7 @@ object ReqResp {
   } yield ()
 
 
-
+/*
     private lazy val jdbcRuntime: DbConfig => zio.Runtime[JdbcIO] = dbconf => {
       val props = new Properties()
       props.setProperty("user", dbconf.username)
@@ -154,6 +154,7 @@ object ReqResp {
         }.toList
       )
     }
+  */
 
   /**
    * This is one of client handler.
@@ -248,34 +249,47 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
 
 
         //check that all requested db are configures.
-        resEntity <- dictDbsCheckInConfig(reqRequestData, configuredDbList).provideSomeM(env)
+        resString :ByteString <- dictDbsCheckInConfig(reqRequestData, configuredDbList).provideSomeM(env)
           .foldM(
             checkErr => {
               val failJson = DbErrorDesc("error", checkErr.getMessage, "Cause of exception", checkErr.getClass.getName).asJson
-              Task(HttpEntity(`application/json`, compress(Printer.spaces2.print(failJson))))
+              //Task(HttpEntity(`application/json`, compress(Printer.spaces2.print(failJson))))
+              Task(compress(Printer.spaces2.print(failJson)))
             },
             checkOk => {
               //********************************************
               // move this code in separate function and run effects in parallel.
               /*Task.foreachPar(seqResDicts.dicts){thisReqDict =>
-
               }
               */
+              val seqDictDataRows : Task[List[DictDataRows]] = Task.foreachPar(seqResDicts.dicts){thisDict =>
+                DbExecutor.getDict(configuredDbList, thisDict)}
 
-              Task{jdbcRuntime(/*configuredDbList.find(dbc => dbc.name=="")*/configuredDbList.head)}
-                .foldM(
-                  failConn => {
-                    val failJson = DbErrorDesc("error", failConn.getMessage, failConn.getCause.toString, failConn.getClass.getName).asJson
-                    Task(HttpEntity(`application/json`, compress(Printer.spaces2.print(failJson))))
-                  },
-                  conn => {
-                    val cursorData = getCursorData(Dict("periods","db1_msk_gu","prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"))
-                    /*.timeout(zio.duration.Duration.apply(5,TimeUnit.SECONDS))*/
-                    val ds: DictDataRows = conn.unsafeRun(JdbcIO.transact(cursorData))// transact close connection. conn.environment.closeConnection
-                    val jsonString :String = Printer.spaces2.print(List(ds,ds).asJson)// noSpaces
-                    Task(HttpEntity(`application/json`.withParams(Map("charset" -> "UTF-8")), compress(jsonString)))
-                  }
-                )
+              val listDictRows :Task[ByteString] = for {
+                ldr <- seqDictDataRows
+                str = DictsDataAccum(ldr)
+              } yield compress(Printer.spaces2.print(str.asJson))
+
+              listDictRows
+
+              /*
+              Task.foreachPar(seqResDicts.dicts) {thisDict =>
+                Task(jdbcRuntime(configuredDbList.head/*configuredDbList.find(dbc => dbc.name == thisDict.db )*//*configuredDbList.head*/))
+                  .foldM(
+                    failConn => {
+                      val failJson = DbErrorDesc("error", failConn.getMessage, failConn.getCause.toString, failConn.getClass.getName).asJson
+                      //Task(HttpEntity(`application/json`, compress(Printer.spaces2.print(failJson))))
+                      Task(compress(Printer.spaces2.print(failJson)))
+                    },
+                    conn => {
+                      val cursorData = getCursorData(Dict(thisDict.name, thisDict.db, thisDict.proc))
+                      val ds: DictDataRows = conn.unsafeRun(JdbcIO.transact(cursorData))
+                      //Task(HttpEntity(`application/json`.withParams(Map("charset" -> "UTF-8")), compress(Printer.spaces2.print(ds.asJson))))
+                      Task(compress(Printer.spaces2.print(ds.asJson)))
+                    }
+                  )
+              }
+              */
 
               //********************************************
             }
@@ -283,9 +297,11 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
 
           //**************************************************************************************
         // Common logic
+        resEntity <- Task(HttpEntity(`application/json`.withParams(Map("charset" -> "UTF-8")), resString))
+
         httpResp <- Task(HttpResponse(StatusCodes.OK, entity = resEntity))
 
-        //todo: bug fixing, we need control from client where user or not gzip compresison.
+        //todo: bug fixing, we need control from client where user or not gzip compression.
         httpRespWithHeaders = httpResp.addHeader(`Content-Encoding`(HttpEncodings.gzip))
 
         resFromFuture <- ZIO.fromFuture { implicit ec =>
