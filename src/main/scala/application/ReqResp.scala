@@ -17,7 +17,7 @@ import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
 import confs.{Config, DbConfig}
 import data.{DbErrorDesc, DictDataRows, DictRow}
-import dbconn.JdbcIO
+import dbconn.{JdbcIO}
 import io.circe.generic.JsonCodec
 import io.circe.parser.parse
 import io.circe.{Decoder, Encoder, Json, Printer}
@@ -238,16 +238,16 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
       } yield checkResult //UIO.succeed(())
 
 
-
-
   val routeDicts: (HttpRequest, Ref[Int], List[DbConfig], Future[String]) => ZIO[ZEnv, Throwable, HttpResponse] =
     (request, cache, configuredDbList, reqEntity) =>
       for {
         _ <- logRequest(request)
         reqRequestData = parseRequestData(reqEntity)
         _ <- logReqData(reqRequestData)
+        seqResDicts <- reqRequestData
 
-        //check all requested db are configures.
+
+        //check that all requested db are configures.
         resEntity <- dictDbsCheckInConfig(reqRequestData, configuredDbList).provideSomeM(env)
           .foldM(
             checkErr => {
@@ -257,8 +257,12 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
             checkOk => {
               //********************************************
               // move this code in separate function and run effects in parallel.
+              /*Task.foreachPar(seqResDicts.dicts){thisReqDict =>
 
-              Task{jdbcRuntime(configuredDbList.head)}
+              }
+              */
+
+              Task{jdbcRuntime(/*configuredDbList.find(dbc => dbc.name=="")*/configuredDbList.head)}
                 .foldM(
                   failConn => {
                     val failJson = DbErrorDesc("error", failConn.getMessage, failConn.getCause.toString, failConn.getClass.getName).asJson
