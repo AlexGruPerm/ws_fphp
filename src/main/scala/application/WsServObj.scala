@@ -79,6 +79,9 @@ object WsServObj {
       ss <- Task(Http(actorSystem).bind(interface = conf.api.endpoint, port = conf.api.port))
     } yield ss
 
+  /**
+   * dbConfigList are registered list of databases from config file - application.conf
+  */
   def reqHandlerM(dbConfigList: List[DbConfig], actorSystem: ActorSystem, cache: Ref[Int])(request: HttpRequest):
   Future[HttpResponse] = {
     implicit val system: ActorSystem = actorSystem

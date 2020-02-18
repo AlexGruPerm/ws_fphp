@@ -11,3 +11,4 @@ import io.circe.generic.JsonCodec
                                    message: String,
                                    cause: String,
                                    exception: String)
+

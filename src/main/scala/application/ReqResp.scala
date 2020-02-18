@@ -21,9 +21,9 @@ import io.circe.generic.JsonCodec
 import io.circe.parser.parse
 import io.circe.{Decoder, Encoder, Json, Printer}
 import io.circe.syntax._
-import logging.LoggerCommon._
+import logging.LoggerCommon.{env, _}
 import zio.console.putStrLn
-import zio.logging.{LogLevel, log}
+import zio.logging.{LogLevel, Logging, log}
 import zio.{DefaultRuntime, IO, Ref, Schedule, Task, UIO, URIO, ZEnv, ZIO}
 
 import scala.concurrent.{Await, Future}
@@ -31,7 +31,7 @@ import scala.io.{BufferedSource, Source}
 import scala.language.postfixOps
 import io.circe.syntax._
 import org.postgresql.jdbc.PgResultSet
-import reqdata.{Dict, ReqParseException, RequestData}
+import reqdata.{Dict, NoConfigureDbInRequest, ReqParseException, RequestData}
 
 import scala.util.{Failure, Success, Try}
 
@@ -223,19 +223,62 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
   ).asJson
 
 
-  val routeDicts: (HttpRequest, Ref[Int], List[DbConfig], Future[String]) => ZIO[ZEnv, Throwable, HttpResponse] =
-    (request, cache, dbConfigList ,reqEntity) => for {
-      _ <- logRequest(request)
-     reqJson = parseRequestData(reqEntity)
-     _ <- logReqData(reqJson)
 
-      dbConnName :String = "db1_msk_gu"
-      dbCFG : DbConfig = dbConfigList.find(dbc => dbc.name == dbConnName)
+  /**
+   * Function to check in one place that all dicts.db exist among configured db list (application.conf)
+  */
+  val dictDbsCheckInConfig: (Task[RequestData], List[DbConfig]) => ZIO[Logging, Throwable, Unit] =
+    (requestData, configuredDbList) =>
+      for {
+        logChecker <- ZIO.access[Logging](_.logger)
+        reqData <- requestData
+        reqListDb: Seq[String] = reqData.dicts.map(_.db).distinct
+        accumRes <-
+          ZIO.foreachPar(reqListDb) { thisDb =>
+            configuredDbList.find(_.name == thisDb) match {
+              case Some(_) => ZIO.succeed(None)
+              case None => ZIO.succeed(Some(s"DB [$thisDb] from request not found in config file."))
+            }
+          }
+        _ <- logChecker.locallyAnnotate(correlationId, "db_conf_checker") {
+          ZIO.foreach(accumRes.flatten)(thisErrLine => log(LogLevel.Error)(thisErrLine))
+        }
+
+        checkResult <- if (accumRes.flatten.nonEmpty)
+          throw NoConfigureDbInRequest("There is at least one db in request that isn't configured in application.conf")
+        else UIO.succeed(())
+
+      } yield checkResult //UIO.succeed(())
+
+
+
+
+  val routeDicts: (HttpRequest, Ref[Int], List[DbConfig], Future[String]) => ZIO[ZEnv, Throwable, HttpResponse] =
+    (request, cache, configuredDbList, reqEntity) =>
+      for {
+        _ <- logRequest(request)
+        reqRequestData = parseRequestData(reqEntity)
+        _ <- logReqData(reqRequestData)
+
+        //todo: Need common function to check in one place that all dicts.db exist in configured db list from
+        //      config file. Otherwise interrupt request proccessing.
+        _ <- dictDbsCheckInConfig(reqRequestData,configuredDbList).provideSomeM(env)
+
+          /*
+          .foldM(
+          throw new NoSuchElementException(s"Database name was not found in list of configures databases."))(
+
+        )
+        */
+
+
+        dbConnName :String = "db1_msk_gu"
+        dbCFG : DbConfig = configuredDbList.find(dbc => dbc.name == dbConnName)
         .fold(
           throw new NoSuchElementException(s"There is no this db connection name [$dbConnName] in config file."))(
           s => s)
 
-      httpResp <- Task{jdbcRuntime(dbCFG)}
+        httpResp <- Task{jdbcRuntime(dbCFG)}
         .fold(
           failConn => HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(failJson))),
           conn => {
@@ -249,7 +292,11 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
             val dsRes: List[DictDataRows] = List(ds,ds2)
 
             // conn.environment.closeConnection -- method transact close connection.
+
             val jsonString :String = Printer.spaces2.print(/*ds*/dsRes.asJson)// noSpaces
+
+            //todo: compress or not must be set from outside!
+
             HttpResponse(StatusCodes.OK, entity =
               HttpEntity(`application/json`
                 .withParams(Map("charset" -> "UTF-8")), compress(jsonString,Gzip)
@@ -258,7 +305,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
           }
         )
 
-      resFromFuture <- ZIO.fromFuture { implicit ec => Future.successful(httpResp).flatMap{
+        resFromFuture <- ZIO.fromFuture { implicit ec => Future.successful(httpResp).flatMap{
         result: HttpResponse => Future(result).map(_ => result)
       }}
 
