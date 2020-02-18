@@ -1,8 +1,7 @@
 package dbconn
 
 import java.sql.{Connection, SQLException}
-
-import zio.{UIO, ZIO}
+import zio.{ZIO}
 
 trait JdbcIO {
   def connection: Connection

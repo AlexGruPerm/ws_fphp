@@ -2,6 +2,7 @@ package application
 
 import java.io.{File, IOException}
 import java.sql.{Connection, Types}
+import java.util.concurrent.TimeUnit
 import java.util.{NoSuchElementException, Properties}
 
 import akka.http.javadsl.model.headers.AcceptEncoding
@@ -32,6 +33,7 @@ import scala.language.postfixOps
 import io.circe.syntax._
 import org.postgresql.jdbc.PgResultSet
 import reqdata.{Dict, NoConfigureDbInRequest, ReqParseException, RequestData}
+import zio.clock.Clock
 
 import scala.util.{Failure, Success, Try}
 
@@ -116,21 +118,21 @@ object ReqResp {
 
 
     private lazy val jdbcRuntime: DbConfig => zio.Runtime[JdbcIO] = dbconf => {
-    val props = new Properties()
-    props.setProperty("user", dbconf.username)
-    props.setProperty("password", dbconf.password)
-    zio.Runtime(new JdbcIO {
-      Class.forName(dbconf.driver)
-      //todo: maybe Properties instead of u,p
-      val connection: Connection = java.sql.DriverManager.getConnection(dbconf.url + dbconf.dbname, props)
-      connection.setClientInfo("ApplicationName",s"wsfphp")
-      connection.setAutoCommit(false)
-    }, zio.internal.PlatformLive.Default
-    )
+      val props = new Properties()
+      props.setProperty("user", dbconf.username)
+      props.setProperty("password", dbconf.password)
+      zio.Runtime(new JdbcIO {
+          Class.forName(dbconf.driver)
+          //todo: maybe Properties instead of u,p
+          val connection: Connection = java.sql.DriverManager.getConnection(dbconf.url + dbconf.dbname, props)
+          connection.setClientInfo("ApplicationName", s"wsfphp")
+          connection.setAutoCommit(false)
+      }, zio.internal.PlatformLive.Default
+      )
   }
 
 
-  val getCursorData: Dict => ZIO[JdbcIO, Throwable, DictDataRows/*List[List[DictRow]]*/] = dict =>
+  val getCursorData: Dict => ZIO[JdbcIO, Throwable, DictDataRows] = dict =>
     JdbcIO.effect { conn =>
       val stmt = conn.prepareCall(s"{call ${dict.proc} }")
       stmt.setNull(1, Types.OTHER)
@@ -169,24 +171,8 @@ object ReqResp {
   import akka.http.scaladsl.coding.{Encoder, Gzip }
   import akka.http.scaladsl.model._, headers.HttpEncodings
 
-  private def compress(input: String, encoder: Encoder) :ByteString =
-    encoder.encode(ByteString(input))
-
-/*
-  implicit val decoderRequestData: Decoder[RequestData] = Decoder.instance { h =>
-    for {
-      userSession <- h.get[String]("user_session")
-      dicts <- h.get[Seq[Dict]]("dicts")
-    } yield RequestData(userSession,dicts)
-  }
-
-  implicit val decoderDict: Decoder[Dict] = Decoder.instance { h =>
-    for {
-      db <- h.get[String]("db")
-      proc <- h.get[String]("proc")
-    } yield Dict(db,proc)
-  }
-  */
+  private def compress(input: String) :ByteString =
+    Gzip.encode(ByteString(input))
 
   import io.circe.generic.auto._, io.circe.syntax._
   import scala.concurrent.duration._
@@ -216,12 +202,13 @@ cva <- cache.get
 _ <- putStrLn(s"AFTER(test): cg=$cva")
 */
 
+/*
   private val failJson = DbErrorDesc("error",
     "remaining connection slots are reserved for non-replication superuser connections",
     "Cause of exception",
     "PSQLException"
   ).asJson
-
+*/
 
 
   /**
@@ -237,20 +224,18 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
           ZIO.foreachPar(reqListDb) { thisDb =>
             configuredDbList.find(_.name == thisDb) match {
               case Some(_) => ZIO.succeed(None)
-              case None => ZIO.succeed(Some(s"DB [$thisDb] from request not found in config file."))
+              case None => ZIO.succeed(Some(s"DB [$thisDb] from request not found in config file application.conf"))
             }
           }
         _ <- logChecker.locallyAnnotate(correlationId, "db_conf_checker") {
           ZIO.foreach(accumRes.flatten)(thisErrLine => log(LogLevel.Error)(thisErrLine))
         }
-
         checkResult <- if (accumRes.flatten.nonEmpty)
-          throw NoConfigureDbInRequest("There is at least one db in request that isn't configured in application.conf")
+          Task.fail(
+            NoConfigureDbInRequest(accumRes.flatten.head)
+          )
         else UIO.succeed(())
-
       } yield checkResult //UIO.succeed(())
-
-
 
 
 
@@ -261,31 +246,46 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
         _ <- logRequest(request)
         reqRequestData = parseRequestData(reqEntity)
         _ <- logReqData(reqRequestData)
+
         //check all requested db are configures.
-        _ <- dictDbsCheckInConfig(reqRequestData, configuredDbList).provideSomeM(env)
+        resEntity <- dictDbsCheckInConfig(reqRequestData, configuredDbList).provideSomeM(env)
+          .foldM(
+            checkErr => {
+              val failJson = DbErrorDesc("error", checkErr.getMessage, "Cause of exception", checkErr.getClass.getName).asJson
+              Task(HttpEntity(`application/json`, compress(Printer.spaces2.print(failJson))))
+            },
+            checkOk => {
+              //********************************************
+              // move this code in separate function and run effects in parallel.
 
-        dbConnName :String = "db1_msk_gu"
-        dbCFG : DbConfig = configuredDbList.find(dbc => dbc.name == "db1_msk_gu")
-        .fold(throw new NoSuchElementException(s"There is no this db connection name [$dbConnName] in config file."))(
-          s => s)
+              Task{jdbcRuntime(configuredDbList.head)}
+                .foldM(
+                  failConn => {
+                    val failJson = DbErrorDesc("error", failConn.getMessage, failConn.getCause.toString, failConn.getClass.getName).asJson
+                    Task(HttpEntity(`application/json`, compress(Printer.spaces2.print(failJson))))
+                  },
+                  conn => {
+                    val cursorData = getCursorData(Dict("periods","db1_msk_gu","prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"))
+                    /*.timeout(zio.duration.Duration.apply(5,TimeUnit.SECONDS))*/
+                    val ds: DictDataRows = conn.unsafeRun(JdbcIO.transact(cursorData))// transact close connection. conn.environment.closeConnection
+                    val jsonString :String = Printer.spaces2.print(List(ds,ds).asJson)// noSpaces
+                    Task(HttpEntity(`application/json`.withParams(Map("charset" -> "UTF-8")), compress(jsonString)))
+                  }
+                )
 
-        httpResp <- Task{jdbcRuntime(dbCFG)}
-        .fold(
-          failConn => HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(failJson))),
-          conn => {
-            val cursorData = getCursorData(Dict("periods","db1_msk_gu","prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"))
-            val ds: DictDataRows = conn.unsafeRun(JdbcIO.transact(cursorData)) // transact close connection. conn.environment.closeConnection
-            val dsRes: List[DictDataRows] = List(ds,ds)
-            val jsonString :String = Printer.spaces2.print(dsRes.asJson)// noSpaces
-            HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`.withParams(Map("charset" -> "UTF-8")), compress(jsonString,Gzip))).addHeader(`Content-Encoding`(HttpEncodings.gzip))
-          }
-        )
+              //********************************************
+            }
+          )
 
-
-        //**************************************************************************************
+          //**************************************************************************************
         // Common logic
+        httpResp <- Task(HttpResponse(StatusCodes.OK, entity = resEntity))
+
+        //todo: bug fixing, we need control from client where user or not gzip compresison.
+        httpRespWithHeaders = httpResp.addHeader(`Content-Encoding`(HttpEncodings.gzip))
+
         resFromFuture <- ZIO.fromFuture { implicit ec =>
-          Future.successful(httpResp).flatMap {
+          Future.successful(httpRespWithHeaders).flatMap {
             result: HttpResponse => Future(result).map(_ => result)
           }
         }
