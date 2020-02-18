@@ -253,63 +253,48 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
 
 
 
+
+
   val routeDicts: (HttpRequest, Ref[Int], List[DbConfig], Future[String]) => ZIO[ZEnv, Throwable, HttpResponse] =
     (request, cache, configuredDbList, reqEntity) =>
       for {
         _ <- logRequest(request)
         reqRequestData = parseRequestData(reqEntity)
         _ <- logReqData(reqRequestData)
-
-        //todo: Need common function to check in one place that all dicts.db exist in configured db list from
-        //      config file. Otherwise interrupt request proccessing.
-        _ <- dictDbsCheckInConfig(reqRequestData,configuredDbList).provideSomeM(env)
-
-          /*
-          .foldM(
-          throw new NoSuchElementException(s"Database name was not found in list of configures databases."))(
-
-        )
-        */
-
+        //check all requested db are configures.
+        _ <- dictDbsCheckInConfig(reqRequestData, configuredDbList).provideSomeM(env)
 
         dbConnName :String = "db1_msk_gu"
-        dbCFG : DbConfig = configuredDbList.find(dbc => dbc.name == dbConnName)
-        .fold(
-          throw new NoSuchElementException(s"There is no this db connection name [$dbConnName] in config file."))(
+        dbCFG : DbConfig = configuredDbList.find(dbc => dbc.name == "db1_msk_gu")
+        .fold(throw new NoSuchElementException(s"There is no this db connection name [$dbConnName] in config file."))(
           s => s)
 
         httpResp <- Task{jdbcRuntime(dbCFG)}
         .fold(
           failConn => HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`, Printer.noSpaces.print(failJson))),
           conn => {
-            //here we need execute effect that use jdbcRuntime for execute queries in db.
-            //and then close explicitly close connection. todo: adbcp - don't close.
             val cursorData = getCursorData(Dict("periods","db1_msk_gu","prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"))
-            val ds: DictDataRows/*List[List[DictRow]]*/ = conn.unsafeRun(JdbcIO.transact(cursorData))
-
-            val ds2: DictDataRows = ds
-
-            val dsRes: List[DictDataRows] = List(ds,ds2)
-
-            // conn.environment.closeConnection -- method transact close connection.
-
-            val jsonString :String = Printer.spaces2.print(/*ds*/dsRes.asJson)// noSpaces
-
-            //todo: compress or not must be set from outside!
-
-            HttpResponse(StatusCodes.OK, entity =
-              HttpEntity(`application/json`
-                .withParams(Map("charset" -> "UTF-8")), compress(jsonString,Gzip)
-              )
-            ).addHeader(`Content-Encoding`(HttpEncodings.gzip))
+            val ds: DictDataRows = conn.unsafeRun(JdbcIO.transact(cursorData)) // transact close connection. conn.environment.closeConnection
+            val dsRes: List[DictDataRows] = List(ds,ds)
+            val jsonString :String = Printer.spaces2.print(dsRes.asJson)// noSpaces
+            HttpResponse(StatusCodes.OK, entity = HttpEntity(`application/json`.withParams(Map("charset" -> "UTF-8")), compress(jsonString,Gzip))).addHeader(`Content-Encoding`(HttpEncodings.gzip))
           }
         )
 
-        resFromFuture <- ZIO.fromFuture { implicit ec => Future.successful(httpResp).flatMap{
-        result: HttpResponse => Future(result).map(_ => result)
-      }}
+
+        //**************************************************************************************
+        // Common logic
+        resFromFuture <- ZIO.fromFuture { implicit ec =>
+          Future.successful(httpResp).flatMap {
+            result: HttpResponse => Future(result).map(_ => result)
+          }
+        }
 
     } yield resFromFuture
+
+
+
+
 
 
   private def openFile(s: String): IO[IOException, BufferedSource] =
