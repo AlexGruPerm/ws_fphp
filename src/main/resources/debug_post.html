@@ -54,27 +54,29 @@
   </script>
 </head>
 <body>
+<input type="submit" id="sendrq" value="Send post request to ws"></br></br>
+<input type="submit" id="repeat500" value="Repeat post request each 500 ms."></br></br>
+<input type="submit" id="repeat100" value="Repeat post request each 100 ms."></br></br>
+<input type="submit" id="repeat10" value="Repeat post request each 10 ms."></br></br>
+<input type="submit" id="stprep" value="STOP REPEAT"></br></br>
 <table border="1" height=300px cellspacing="0" cellpadding="0" style="table-layout: fixed; width=75%;">
     <th>
     <td width="50%">
-    <div contenteditable="true">
+    <div id="rq-div" contenteditable="true">
         <pre id="rq-json" style="height: 100%; overflow-y: scroll;">
             req_json_text
         </pre>
     </div>
     </td>
     <td width="50%">
-        <pre id="rs-json" style="height: 100%; overflow-y: scroll;">
+        <div id="rs-div" contenteditable="true">
+          <pre id="rs-json" style="height: 100%; overflow-y: scroll;">
             ws response here
-        </pre>
+          </pre>
+        </div>
     </td>
     </th>
 </table>
 </br>
-<input type="submit" id="sendrq" value="Send post request to ws"></br></br>
-<input type="submit" id="repeat500" value="Repeat post request each 500 ms."></br></br>
-<input type="submit" id="repeat100" value="Repeat post request each 100 ms."></br></br>
-<input type="submit" id="repeat10" value="Repeat post request each 10 ms."></br></br>
-<input type="submit" id="stprep" value="STOP REPEAT">
 </body>
 </html>

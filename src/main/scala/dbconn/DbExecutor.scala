@@ -1,6 +1,7 @@
 package dbconn
 
 import java.sql.{Connection, Types}
+import java.util.concurrent.TimeUnit
 import java.util.{NoSuchElementException, Properties}
 
 import confs.DbConfig
@@ -8,7 +9,10 @@ import data.{DictDataRows, DictRow}
 import org.postgresql.jdbc.PgResultSet
 import io.circe.generic.auto._
 import io.circe.syntax._
+import logging.LoggerCommon.correlationId
 import reqdata.{Dict, NoConfigureDbInRequest}
+import zio.clock.Clock
+import zio.logging.{LogLevel, Logging, log}
 import zio.{Task, ZIO}
 
 object DbExecutor {
@@ -50,12 +54,24 @@ object DbExecutor {
       )
     }
 
+  def currentTime: ZIO[Clock, Nothing, Long] = ZIO.accessM[Clock](_.clock.currentTime(TimeUnit.MILLISECONDS))
+
   val getDict: (List[DbConfig], Dict) => Task[DictDataRows] = (configuredDbList, trqDict) =>
     for {
       thisConfig: DbConfig <-
         ZIO.fromOption(configuredDbList.find(dbc => dbc.name == trqDict.db))
-          .mapError(_ =>  NoConfigureDbInRequest(s"db [${trqDict.db}] not found in config. code [003]")) // :ZIO[Any, Throwable, DbConfig]
+          .mapError(_ =>
+            //NoConfigureDbInRequest(s"db [${trqDict.db}] not found in config. code [003]")
+             new NoSuchElementException(s"db [${trqDict.db}] not found in config. code [003]")
+          ) // :ZIO[Any, Throwable, DbConfig]
       conn <- Task(jdbcRuntime(thisConfig))
+
+    //  loggetDict <- ZIO.access[Logging](_.logger)
+    //  _ <- loggetDict.locallyAnnotate(correlationId, "db_get_dict") {
+    //    log(LogLevel.Debug)(s"Connection opened for ${thisConfig.name} begin req ${trqDict.name}"/*conn.environment.connection.getClientInfo()*/)
+    //  }
+
+
       ds: DictDataRows = conn.unsafeRun(
         JdbcIO.transact(
           getCursorData(trqDict)
@@ -64,3 +80,5 @@ object DbExecutor {
     } yield ds
 
 }
+
+

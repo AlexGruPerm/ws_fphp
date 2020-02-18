@@ -325,7 +325,11 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
 
   //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
   val routeGetDebug: (HttpRequest, Ref[Int]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
-    strDebugForm <- openFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").bracket(closeFile) { file =>
+    strDebugForm <- openFile(
+      //"C:\\ws_fphp\\src\\main\\resources\\debug_post.html"
+      "C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\debug_post.html"
+    //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
+    ).bracket(closeFile) { file =>
       Task(file.getLines.mkString.replace("req_json_text", reqJsonText))
     }
     _ <- logRequest(request)
