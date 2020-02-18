@@ -243,8 +243,13 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
             //and then close explicitly close connection. todo: adbcp - don't close.
             val cursorData = getCursorData(Dict("periods","db1_msk_gu","prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"))
             val ds: DictDataRows/*List[List[DictRow]]*/ = conn.unsafeRun(JdbcIO.transact(cursorData))
+
+            val ds2: DictDataRows = ds
+
+            val dsRes: List[DictDataRows] = List(ds,ds2)
+
             // conn.environment.closeConnection -- method transact close connection.
-            val jsonString :String = Printer.spaces2.print(ds.asJson)// noSpaces
+            val jsonString :String = Printer.spaces2.print(/*ds*/dsRes.asJson)// noSpaces
             HttpResponse(StatusCodes.OK, entity =
               HttpEntity(`application/json`
                 .withParams(Map("charset" -> "UTF-8")), compress(jsonString,Gzip)
