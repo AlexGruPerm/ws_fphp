@@ -13,7 +13,7 @@ import logging.LoggerCommon.correlationId
 import reqdata.{Dict, NoConfigureDbInRequest}
 import zio.clock.Clock
 import zio.logging.{LogLevel, Logging, log}
-import zio.{Task, ZIO}
+import zio.{DefaultRuntime, Task, ZIO}
 
 object DbExecutor {
 
@@ -63,17 +63,15 @@ object DbExecutor {
 
   val getDict: (List[DbConfig], Dict) => Task[DictDataRows] = (configuredDbList, trqDict) =>
     for {
-      thisConfig: DbConfig <-
-        ZIO.fromOption(configuredDbList.find(dbc => dbc.name == trqDict.db))
-          .mapError(_ => new NoSuchElementException(s"db [${trqDict.db}] not found in config. code [003]")
-          )
-      conn <- Task(jdbcRuntime(thisConfig))
-      ds: DictDataRows = conn.unsafeRun(
+      thisConfig <- ZIO.fromOption(configuredDbList.find(dbc => dbc.name == trqDict.db))
+          .mapError(_ => new NoSuchElementException(s"Database name [${trqDict.db}] not found in config."))
+      ds: DictDataRows = jdbcRuntime(thisConfig).unsafeRun(
         JdbcIO.transact(
           getCursorData(trqDict)
         )
       )
     } yield ds
+
 
 }
 

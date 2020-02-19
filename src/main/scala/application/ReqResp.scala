@@ -292,7 +292,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
         else UIO.succeed(())
       } yield checkResult //UIO.succeed(())
 
-
+  import zio.blocking._
   val routeDicts: (HttpRequest, Ref[Int], List[DbConfig], Future[String]) => ZIO[ZEnv, Throwable, HttpResponse] =
     (request, cache, configuredDbList, reqEntity) =>
       for {
@@ -310,7 +310,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
               Task(compress(Printer.spaces2.print(failJson)))
             },
             checkOk => {
-              val seqDictDataRows: Task[List[DictDataRows]] = Task.foreachPar(seqResDicts.dicts) { thisDict =>
+              val seqDictDataRows: Task[List[DictDataRows]] = Task.foreachParN(20)(seqResDicts.dicts) { thisDict =>
                 DbExecutor.getDict(configuredDbList, thisDict)
               }
               for {
@@ -319,6 +319,11 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
               } yield compress(Printer.spaces2.print(str.asJson))
             }
           )
+
+        /**
+         * foreachPar    - Applies the function `f` to each element of the `Iterable[A]` in parallel, and returns the results in a new `List[B]`.
+         * collectAllPar - Evaluate each effect in the structure in parallel, and collect the results.
+        */
 
         // Common logic
         resEntity <- Task(HttpEntity(`application/json`.withParams(Map("charset" -> "UTF-8")), resString))
