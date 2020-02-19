@@ -51,6 +51,7 @@ object ReqResp {
   private val reqJsonText =
     """
       |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
+      |                "cont_encoding_gzip_enabled" : 1,
       |                "dicts": [
       |                {
       |                  "name" : "period",
@@ -109,6 +110,7 @@ object ReqResp {
       for {
         _ <- log(LogLevel.Trace)("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         _ <- log(LogLevel.Trace)(s"session_id = ${rd.user_session}")
+        _ <- log(LogLevel.Trace)(s"encoding_gzip = ${rd.cont_encoding_gzip_enabled}")
         _ <- URIO.foreach(rd.dicts)(d => log(LogLevel.Trace)(s"dict = ${d.db} - ${d.proc}"))
         _ <- log(LogLevel.Trace)("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
       } yield ()
@@ -174,6 +176,7 @@ object ReqResp {
 
   private def compress(input: String) :ByteString =
     Gzip.encode(ByteString(input))
+  //ByteString(input)
 
   import io.circe.generic.auto._, io.circe.syntax._
   import scala.concurrent.duration._

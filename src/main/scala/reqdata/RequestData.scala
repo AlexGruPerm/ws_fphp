@@ -17,7 +17,9 @@ case class Dict(name: String, db:String, proc: String)
  * for all dicts requested and additional information.
 */
 @JsonCodec
-case class RequestData(user_session:String, dicts: Seq[Dict])
+case class RequestData(user_session: String,
+                       cont_encoding_gzip_enabled: Int, //use gzip or not for response json (Content-Encoding)
+                       dicts: Seq[Dict])
 
 
 
