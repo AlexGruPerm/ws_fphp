@@ -109,7 +109,7 @@ object WsServObj {
         }
       }
 
-    new DefaultRuntime {}.unsafeRunToFuture(responseFuture)
+    (new DefaultRuntime {}).unsafeRunToFuture(responseFuture)
   }
 
 

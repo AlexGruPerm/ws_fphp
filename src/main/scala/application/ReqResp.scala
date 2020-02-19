@@ -240,7 +240,7 @@ object ReqResp {
   import io.circe.generic.auto._, io.circe.syntax._
   import scala.concurrent.duration._
   private val parseRequestData: Future[String] => Task[RequestData] = futString => {
-    val strRequest: String  = Await.result(futString, 1 second)
+    val strRequest: String  = Await.result(futString, 3 second)
     parse(strRequest) match {
       case Left (failure) => Task.fail (
         ReqParseException("Error code[001] Invalid json in request", failure.getCause)
@@ -281,6 +281,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
               case None => ZIO.succeed(Some(s"DB [$thisDb] from request not found in config file application.conf"))
             }
           }
+        _ <- logChecker.log(LogLevel.Error)("error message here")
         _ <- logChecker.locallyAnnotate(correlationId, "db_conf_checker") {
           ZIO.foreach(accumRes.flatten)(thisErrLine => log(LogLevel.Error)(thisErrLine))
         }
@@ -299,62 +300,28 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
         reqRequestData = parseRequestData(reqEntity)
         _ <- logReqData(reqRequestData)
         seqResDicts <- reqRequestData
-
-
         //check that all requested db are configures.
         resString :ByteString <- dictDbsCheckInConfig(reqRequestData, configuredDbList).provideSomeM(env)
           .foldM(
             checkErr => {
-              val failJson = DbErrorDesc("error", checkErr.getMessage, "Cause of exception", checkErr.getClass.getName).asJson
+              val failJson =
+                DbErrorDesc("error", checkErr.getMessage, "Cause of exception", checkErr.getClass.getName).asJson
               //Task(HttpEntity(`application/json`, compress(Printer.spaces2.print(failJson))))
               Task(compress(Printer.spaces2.print(failJson)))
             },
             checkOk => {
-              //********************************************
-              // move this code in separate function and run effects in parallel.
-              /*Task.foreachPar(seqResDicts.dicts){thisReqDict =>
-              }
-              */
-              val seqDictDataRows: Task[List[DictDataRows]] =
-              Task.foreachPar(seqResDicts.dicts) { thisDict =>
+              val seqDictDataRows: Task[List[DictDataRows]] = Task.foreachPar(seqResDicts.dicts) { thisDict =>
                 DbExecutor.getDict(configuredDbList, thisDict)
               }
-
-
-              val listDictRows :Task[ByteString] = for {
+              for {
                 ldr <- seqDictDataRows
                 str = DictsDataAccum(ldr)
               } yield compress(Printer.spaces2.print(str.asJson))
-
-              listDictRows
-
-              /*
-              Task.foreachPar(seqResDicts.dicts) {thisDict =>
-                Task(jdbcRuntime(configuredDbList.head/*configuredDbList.find(dbc => dbc.name == thisDict.db )*//*configuredDbList.head*/))
-                  .foldM(
-                    failConn => {
-                      val failJson = DbErrorDesc("error", failConn.getMessage, failConn.getCause.toString, failConn.getClass.getName).asJson
-                      //Task(HttpEntity(`application/json`, compress(Printer.spaces2.print(failJson))))
-                      Task(compress(Printer.spaces2.print(failJson)))
-                    },
-                    conn => {
-                      val cursorData = getCursorData(Dict(thisDict.name, thisDict.db, thisDict.proc))
-                      val ds: DictDataRows = conn.unsafeRun(JdbcIO.transact(cursorData))
-                      //Task(HttpEntity(`application/json`.withParams(Map("charset" -> "UTF-8")), compress(Printer.spaces2.print(ds.asJson))))
-                      Task(compress(Printer.spaces2.print(ds.asJson)))
-                    }
-                  )
-              }
-              */
-
-              //********************************************
             }
           )
 
-          //**************************************************************************************
         // Common logic
         resEntity <- Task(HttpEntity(`application/json`.withParams(Map("charset" -> "UTF-8")), resString))
-
         httpResp <- Task(HttpResponse(StatusCodes.OK, entity = resEntity))
 
         //todo: bug fixing, we need control from client where user or not gzip compression.
