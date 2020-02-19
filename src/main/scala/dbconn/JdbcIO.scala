@@ -5,7 +5,6 @@ import zio.{ZIO}
 
 trait JdbcIO {
   def connection: Connection
-  def closeConnection: Unit = connection.close()
 }
 
 object JdbcIO {

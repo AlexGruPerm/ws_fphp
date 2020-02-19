@@ -6,6 +6,7 @@ import java.util.{NoSuchElementException, Properties}
 
 import confs.DbConfig
 import data.{DictDataRows, DictRow}
+import dbconn.DbExecutor.jdbcRuntime
 import org.postgresql.jdbc.PgResultSet
 import io.circe.generic.auto._
 import io.circe.syntax._
@@ -13,25 +14,36 @@ import logging.LoggerCommon.correlationId
 import reqdata.{Dict, NoConfigureDbInRequest}
 import zio.clock.Clock
 import zio.logging.{LogLevel, Logging, log}
-import zio.{DefaultRuntime, Task, ZIO}
+import zio.{DefaultRuntime, Task, UIO, ZIO}
+import zio.blocking._
+
+
+//  loggetDict <- ZIO.access[Logging](_.logger)
+//  _ <- loggetDict.locallyAnnotate(correlationId, "db_get_dict") {
+//    log(LogLevel.Debug)(s"Connection opened for ${thisConfig.name} begin req ${trqDict.name}"/*conn.environment.connection.getClientInfo()*/)
+//  }
 
 object DbExecutor {
 
-  private lazy val jdbcRuntime: DbConfig => zio.Runtime[JdbcIO] = dbconf => {
+  def currentTime: ZIO[Clock, Nothing, Long] = ZIO.accessM[Clock](_.clock.currentTime(TimeUnit.MILLISECONDS))
+
+  val jdbcRuntime: DbConfig => UIO[JdbcIO] /*zio.Runtime[JdbcIO]*/ = dbconf => {
     val props = new Properties()
     props.setProperty("user", dbconf.username)
     props.setProperty("password", dbconf.password)
-    zio.Runtime(new JdbcIO {
+    //zio.Runtime(
+      UIO(new JdbcIO {
       Class.forName(dbconf.driver)
       //todo: maybe Properties instead of u,p
       val connection: Connection = java.sql.DriverManager.getConnection(dbconf.url + dbconf.dbname, props)
       connection.setClientInfo("ApplicationName", s"wsfphp")
       connection.setAutoCommit(false)
-    }, zio.internal.PlatformLive.Default
-    )
+    })/*, zio.internal.PlatformLive.Default
+    )*/
   }
 
-  private lazy val getCursorData: Dict => ZIO[JdbcIO, Throwable, DictDataRows] = dict =>
+  //getEntries
+  val getCursorData: Dict => ZIO[JdbcIO, Throwable, DictDataRows] = dict =>
     JdbcIO.effect { conn =>
       val stmt = conn.prepareCall(s"{call ${dict.proc} }")
       stmt.setNull(1, Types.OTHER)
@@ -54,22 +66,13 @@ object DbExecutor {
       )
     }
 
-  def currentTime: ZIO[Clock, Nothing, Long] = ZIO.accessM[Clock](_.clock.currentTime(TimeUnit.MILLISECONDS))
-
-  //  loggetDict <- ZIO.access[Logging](_.logger)
-  //  _ <- loggetDict.locallyAnnotate(correlationId, "db_get_dict") {
-  //    log(LogLevel.Debug)(s"Connection opened for ${thisConfig.name} begin req ${trqDict.name}"/*conn.environment.connection.getClientInfo()*/)
-  //  }
 
   val getDict: (List[DbConfig], Dict) => Task[DictDataRows] = (configuredDbList, trqDict) =>
     for {
       thisConfig <- ZIO.fromOption(configuredDbList.find(dbc => dbc.name == trqDict.db))
           .mapError(_ => new NoSuchElementException(s"Database name [${trqDict.db}] not found in config."))
-      ds: DictDataRows = jdbcRuntime(thisConfig).unsafeRun(
-        JdbcIO.transact(
-          getCursorData(trqDict)
-        )
-      )
+      j :JdbcIO <- jdbcRuntime(thisConfig)
+      ds: DictDataRows <- JdbcIO.transact(getCursorData(trqDict))//.provideSomeM(jdbcRuntime(thisConfig))
     } yield ds
 
 
