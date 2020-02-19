@@ -54,6 +54,65 @@ object ReqResp {
       |                "cont_encoding_gzip_enabled" : 1,
       |                "dicts": [
       |                {
+      |                  "name" : "p1",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                },
+      |                  {
+      |                    "name" : "p2",
+      |                    "db" : "db1_msk_gu",
+      |                    "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                  },
+      |                {
+      |                 "name" : "p3",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                },
+      |                {
+      |                  "name" : "p4",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                },
+      |                  {
+      |                    "name" : "p5",
+      |                    "db" : "db1_msk_gu",
+      |                    "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                  },
+      |                {
+      |                 "name" : "p6",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                },
+      |                {
+      |                  "name" : "p7",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                },
+      |                  {
+      |                    "name" : "p8",
+      |                    "db" : "db1_msk_gu",
+      |                    "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                  },
+      |                {
+      |                 "name" : "p9",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                },
+      |                {
+      |                 "name" : "p10",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                }
+      |              ]
+      |             }
+      |""".stripMargin
+
+  private val reqJsonText_ =
+    """
+      |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
+      |                "cont_encoding_gzip_enabled" : 1,
+      |                "dicts": [
+      |                {
       |                  "name" : "period",
       |                  "db" : "db1_msk_gu",
       |                  "proc" : "prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"
@@ -206,15 +265,6 @@ cva <- cache.get
 _ <- putStrLn(s"AFTER(test): cg=$cva")
 */
 
-/*
-  private val failJson = DbErrorDesc("error",
-    "remaining connection slots are reserved for non-replication superuser connections",
-    "Cause of exception",
-    "PSQLException"
-  ).asJson
-*/
-
-
   /**
    * Function to check in one place that all dicts.db exist among configured db list (application.conf)
   */
@@ -265,8 +315,11 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
               /*Task.foreachPar(seqResDicts.dicts){thisReqDict =>
               }
               */
-              val seqDictDataRows : Task[List[DictDataRows]] = Task.foreachPar(seqResDicts.dicts){thisDict =>
-                DbExecutor.getDict(configuredDbList, thisDict)}
+              val seqDictDataRows: Task[List[DictDataRows]] =
+              Task.foreachPar(seqResDicts.dicts) { thisDict =>
+                DbExecutor.getDict(configuredDbList, thisDict)
+              }
+
 
               val listDictRows :Task[ByteString] = for {
                 ldr <- seqDictDataRows

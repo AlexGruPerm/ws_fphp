@@ -56,22 +56,18 @@ object DbExecutor {
 
   def currentTime: ZIO[Clock, Nothing, Long] = ZIO.accessM[Clock](_.clock.currentTime(TimeUnit.MILLISECONDS))
 
+  //  loggetDict <- ZIO.access[Logging](_.logger)
+  //  _ <- loggetDict.locallyAnnotate(correlationId, "db_get_dict") {
+  //    log(LogLevel.Debug)(s"Connection opened for ${thisConfig.name} begin req ${trqDict.name}"/*conn.environment.connection.getClientInfo()*/)
+  //  }
+
   val getDict: (List[DbConfig], Dict) => Task[DictDataRows] = (configuredDbList, trqDict) =>
     for {
       thisConfig: DbConfig <-
         ZIO.fromOption(configuredDbList.find(dbc => dbc.name == trqDict.db))
-          .mapError(_ =>
-            //NoConfigureDbInRequest(s"db [${trqDict.db}] not found in config. code [003]")
-             new NoSuchElementException(s"db [${trqDict.db}] not found in config. code [003]")
-          ) // :ZIO[Any, Throwable, DbConfig]
+          .mapError(_ => new NoSuchElementException(s"db [${trqDict.db}] not found in config. code [003]")
+          )
       conn <- Task(jdbcRuntime(thisConfig))
-
-    //  loggetDict <- ZIO.access[Logging](_.logger)
-    //  _ <- loggetDict.locallyAnnotate(correlationId, "db_get_dict") {
-    //    log(LogLevel.Debug)(s"Connection opened for ${thisConfig.name} begin req ${trqDict.name}"/*conn.environment.connection.getClientInfo()*/)
-    //  }
-
-
       ds: DictDataRows = conn.unsafeRun(
         JdbcIO.transact(
           getCursorData(trqDict)

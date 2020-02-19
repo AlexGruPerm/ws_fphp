@@ -87,7 +87,7 @@ object WsServObj {
     implicit val system: ActorSystem = actorSystem
     import scala.concurrent.duration._
     import akka.http.scaladsl.unmarshalling.Unmarshal
-    implicit val timeout: Timeout = Timeout(10 seconds)
+    implicit val timeout: Timeout = Timeout(60 seconds)
     implicit val executionContext: ExecutionContextExecutor = system.dispatcher
     import ReqResp._
 
@@ -126,7 +126,7 @@ object WsServObj {
     (cache, conf, actorSystem) => {
     implicit val system: ActorSystem = actorSystem
     import scala.concurrent.duration._
-    implicit val timeout: Timeout = Timeout(10 seconds)
+    implicit val timeout: Timeout = Timeout(60 seconds)
     implicit val executionContext: ExecutionContextExecutor = system.dispatcher
     import akka.stream.scaladsl.Source
       for {
