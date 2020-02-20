@@ -629,6 +629,7 @@ object CollectJsons {
       |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
       |                "cont_encoding_gzip_enabled" : 1,
       |                 "thread_pool" : "block",
+      |                 "request_timeout_ms": 5000,
       |                "dicts": [
       |                {
       |                  "name" : "period",

@@ -19,7 +19,8 @@ case class Dict(name: String, db:String, proc: String)
 @JsonCodec
 case class RequestData(user_session: String,
                        cont_encoding_gzip_enabled: Int, //use gzip or not for response json (Content-Encoding)
-                       thread_pool: String, //
+                       thread_pool: String, //block or sync
+                       request_timeout_ms :Double, //client can set request timeout, after t.o. return json response with error
                        dicts: Seq[Dict])
 
 

@@ -5,6 +5,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http.{IncomingConnection, ServerBinding}
 import akka.http.scaladsl._
 import akka.http.scaladsl.model.{HttpRequest, _}
+import akka.http.scaladsl.settings.{ClientConnectionSettings, ConnectionPoolSettings}
 import akka.util.Timeout
 import application.WsServObj.CommonTypes.IncConnSrvBind
 import confs.{Config, DbConfig}
@@ -69,6 +70,9 @@ object WsServObj {
   object CommonTypes {
     type IncConnSrvBind = akka.stream.scaladsl.Source[IncomingConnection, Future[ServerBinding]]
   }
+
+  //val timeoutSettings = ConnectionPoolSettings(actorSystem.settings.config).withIdleTimeout(10 minutes)
+ //val connSettings = ClientConnectionSettings(actorSystem.settings.config).withIdleTimeout(3 seconds)
 
   val serverSource: (Config, ActorSystem) => ZIO[Any, Throwable, IncConnSrvBind] =
     (conf, actorSystem) => for {
