@@ -35,6 +35,7 @@ import org.postgresql.jdbc.PgResultSet
 import reqdata.{Dict, NoConfigureDbInRequest, ReqParseException, RequestData}
 import zio.clock.Clock
 import io.circe.generic.JsonCodec
+import testsjsons.CollectJsons
 
 import scala.util.{Failure, Success, Try}
 
@@ -48,155 +49,6 @@ import scala.util.{Failure, Success, Try}
  *
 */
 object ReqResp {
-
-  private val reqJsonText =
-    """
-      |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
-      |                "cont_encoding_gzip_enabled" : 1,
-      |                "dicts": [
-      |                {
-      |                  "name" : "p1",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                  {
-      |                    "name" : "p2",
-      |                    "db" : "db1_msk_gu",
-      |                    "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                  },
-      |                {
-      |                 "name" : "p3",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                {
-      |                  "name" : "p4",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                  {
-      |                    "name" : "p5",
-      |                    "db" : "db1_msk_gu",
-      |                    "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                  },
-      |                {
-      |                 "name" : "p6",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                {
-      |                  "name" : "p7",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                  {
-      |                    "name" : "p8",
-      |                    "db" : "db1_msk_gu",
-      |                    "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                  },
-      |                {
-      |                 "name" : "p9",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                {
-      |                 "name" : "p10",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                {
-      |                 "name" : "p11",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                {
-      |                 "name" : "p12",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                {
-      |                 "name" : "p13",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                {
-      |                 "name" : "p14",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                {
-      |                 "name" : "p15",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                {
-      |                 "name" : "p16",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                {
-      |                 "name" : "p17",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                {
-      |                 "name" : "p18",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                {
-      |                 "name" : "p19",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                },
-      |                {
-      |                 "name" : "p20",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
-      |                }
-      |              ]
-      |             }
-      |""".stripMargin
-
-  private val reqJsonText_ =
-    """
-      |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
-      |                "cont_encoding_gzip_enabled" : 1,
-      |                "dicts": [
-      |                {
-      |                  "name" : "period",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"
-      |                },
-      |                  {
-      |                    "name" : "oiv",
-      |                    "db" : "db2_msk_gp",
-      |                    "proc" : "prm_salary.pkg_web_cons_rep_grbs_list(refcur => ?, p_user_id => 45224506)"
-      |                  },
-      |                {
-      |                 "name" : "institution",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.pkg_web_cons_rep_institution_list(refcur => ?, p_user_id => 45224506)"
-      |                },
-      |                {
-      |                  "name" : "industry_class",
-      |                  "db" : "db2_msk_gp",
-      |                  "proc":"prm_salary.pkg_web_cons_rep_form_type_list(refcur => ?)"
-      |                },
-      |                {
-      |                  "name" : "territory",
-      |                  "db" : "db1_msk_gu",
-      |                  "proc":"prm_salary.pkg_web_cons_rep_territory_list(refcur => ?)"
-      |                },
-      |                {
-      |                  "name" : "okfs",
-      |                  "db" : "db2_msk_gp",
-      |                  "proc":"prm_salary.pkg_web_cons_rep_okved_list(refcur => ?)"
-      |                }
-      |              ]
-      |             }
-      |""".stripMargin
-
 
   val logRequest : HttpRequest => Task[Unit] = request => for {
     _  <- zio.logging.locallyAnnotate(correlationId,"log_request"){
@@ -360,14 +212,22 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
               //Task(HttpEntity(`application/json`, compress(Printer.spaces2.print(failJson))))
               Task(compress(Printer.spaces2.print(failJson)))
             },
-            checkOk => {
+            checkOk => for {
+              seqDictDataRows <- ZIO.foreachPar(seqResDicts.dicts){ thisDict =>
+                blocking(DbExecutor.getDict(configuredDbList, thisDict))
+              }
+              str = DictsDataAccum(seqDictDataRows)
+              /*
               for {
-                seqDictDataRows <- ZIO.foreachPar/*N(40)*/(seqResDicts.dicts) { thisDict =>
-                  DbExecutor.getDict(configuredDbList, thisDict)
-                }
-                str = DictsDataAccum(seqDictDataRows)
-              } yield compress(Printer.spaces2.print(str.asJson))
-            }
+                seqDictDataRows <- ZIO.foreachPar(seqResDicts.dicts) { thisDict =>
+                  effectBlocking(DbExecutor.getDict(configuredDbList, thisDict))
+                                }
+                ds :Int <- seqDictDataRows
+                str = DictsDataAccum(ds)
+              }
+                yield compress(Printer.spaces2.print(str.asJson))
+              */
+            } yield compress(Printer.spaces2.print(str.asJson))
           )
 
 
@@ -405,7 +265,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
       //"C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\debug_post.html"
     //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
     ).bracket(closeFile) { file =>
-      Task(file.getLines.mkString.replace("req_json_text", reqJsonText))
+      Task(file.getLines.mkString.replace("req_json_text", CollectJsons.reqJsonText100))
     }
     _ <- logRequest(request)
     cvb <- cache.get
