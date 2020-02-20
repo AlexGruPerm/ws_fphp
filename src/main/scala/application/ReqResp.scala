@@ -214,7 +214,13 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
             checkOk =>
               for {
               str <- ZIO.foreachPar(seqResDicts.dicts){ thisDict =>
-                blocking(DbExecutor.getDict(configuredDbList, thisDict))
+                if (seqResDicts.thread_pool == "block") {
+                  //run in separate blocking pool, "unlimited" thread count
+                  blocking(DbExecutor.getDict(configuredDbList, thisDict))
+                } else {
+                  //run on sync pool, count of threads equal CPU.cores*2 (cycle)
+                  DbExecutor.getDict(configuredDbList, thisDict)
+                }
               }.fold(
                 err =>  DbErrorDesc("error", err.getMessage, "method[routeDicts]", err.getClass.getName).asJson,
                 succ => DictsDataAccum(succ).asJson
@@ -257,7 +263,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
       //"C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\debug_post.html"
     //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
     ).bracket(closeFile) { file =>
-      Task(file.getLines.mkString.replace("req_json_text", CollectJsons.reqJsonText100))
+      Task(file.getLines.mkString.replace("req_json_text", CollectJsons.reqJsonText_))
     }
     _ <- logRequest(request)
     cvb <- cache.get

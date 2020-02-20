@@ -3,12 +3,15 @@ package testsjsons
 object CollectJsons {
 
 
+
+
   val reqJsonText100 =
     """
       |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
       |                "cont_encoding_gzip_enabled" : 1,
+      |                "thread_pool" : "block",
       |                "dicts": [
-      |  {
+      |                 {
       |                  "name" : "p1",
       |                  "db"   : "db1_msk_gu",
       |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 5)"
@@ -625,6 +628,7 @@ object CollectJsons {
     """
       |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
       |                "cont_encoding_gzip_enabled" : 1,
+      |                 "thread_pool" : "block",
       |                "dicts": [
       |                {
       |                  "name" : "period",
