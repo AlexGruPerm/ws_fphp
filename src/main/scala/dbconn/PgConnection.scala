@@ -4,6 +4,7 @@ import java.sql.{Connection, DriverManager, ResultSet, Statement}
 import java.util.Properties
 
 import confs.DbConfig
+import org.postgresql.util.PSQLException
 import org.slf4j.LoggerFactory
 import zio.Task
 
@@ -55,7 +56,7 @@ trait jdbcSession {
       logger.info(s"User sesison pg_backend_pid = $pg_backend_pid")
       */
       pgSess(c,0/*pg_backend_pid*/)
-    }
+    }.refineToOrDie[PSQLException]
 
 }
 

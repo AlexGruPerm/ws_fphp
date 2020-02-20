@@ -209,25 +209,17 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
             checkErr => {
               val failJson =
                 DbErrorDesc("error", checkErr.getMessage, "Cause of exception", checkErr.getClass.getName).asJson
-              //Task(HttpEntity(`application/json`, compress(Printer.spaces2.print(failJson))))
               Task(compress(Printer.spaces2.print(failJson)))
             },
-            checkOk => for {
-              seqDictDataRows <- ZIO.foreachPar(seqResDicts.dicts){ thisDict =>
-                blocking(DbExecutor.getDict(configuredDbList, thisDict))
-              }
-              str = DictsDataAccum(seqDictDataRows)
-              /*
+            checkOk =>
               for {
-                seqDictDataRows <- ZIO.foreachPar(seqResDicts.dicts) { thisDict =>
-                  effectBlocking(DbExecutor.getDict(configuredDbList, thisDict))
-                                }
-                ds :Int <- seqDictDataRows
-                str = DictsDataAccum(ds)
-              }
-                yield compress(Printer.spaces2.print(str.asJson))
-              */
-            } yield compress(Printer.spaces2.print(str.asJson))
+              str <- ZIO.foreachPar(seqResDicts.dicts){ thisDict =>
+                blocking(DbExecutor.getDict(configuredDbList, thisDict))
+              }.fold(
+                err =>  DbErrorDesc("error", err.getMessage, "method[routeDicts]", err.getClass.getName).asJson,
+                succ => DictsDataAccum(succ).asJson
+              )
+            } yield compress(Printer.spaces2.print(str))
           )
 
 
