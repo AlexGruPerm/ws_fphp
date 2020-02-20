@@ -17,7 +17,7 @@ import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
 import confs.{Config, DbConfig}
 import data.{DbErrorDesc, DictDataRows, DictRow, DictsDataAccum}
-import dbconn.{DbExecutor, JdbcIO}
+import dbconn.{DbExecutor, PgConnection}
 import io.circe.generic.JsonCodec
 import io.circe.parser.parse
 import io.circe.{Decoder, Encoder, Json, Printer}
@@ -35,6 +35,7 @@ import org.postgresql.jdbc.PgResultSet
 import reqdata.{Dict, NoConfigureDbInRequest, ReqParseException, RequestData}
 import zio.clock.Clock
 import io.circe.generic.JsonCodec
+
 import scala.util.{Failure, Success, Try}
 
 
@@ -56,52 +57,102 @@ object ReqResp {
       |                {
       |                  "name" : "p1",
       |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
       |                },
       |                  {
       |                    "name" : "p2",
       |                    "db" : "db1_msk_gu",
-      |                    "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                    "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
       |                  },
       |                {
       |                 "name" : "p3",
       |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
       |                },
       |                {
       |                  "name" : "p4",
       |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
       |                },
       |                  {
       |                    "name" : "p5",
       |                    "db" : "db1_msk_gu",
-      |                    "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                    "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
       |                  },
       |                {
       |                 "name" : "p6",
       |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
       |                },
       |                {
       |                  "name" : "p7",
       |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
       |                },
       |                  {
       |                    "name" : "p8",
       |                    "db" : "db1_msk_gu",
-      |                    "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                    "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
       |                  },
       |                {
       |                 "name" : "p9",
       |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
       |                },
       |                {
       |                 "name" : "p10",
       |                  "db" : "db1_msk_gu",
-      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 10)"
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
+      |                },
+      |                {
+      |                 "name" : "p11",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
+      |                },
+      |                {
+      |                 "name" : "p12",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
+      |                },
+      |                {
+      |                 "name" : "p13",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
+      |                },
+      |                {
+      |                 "name" : "p14",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
+      |                },
+      |                {
+      |                 "name" : "p15",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
+      |                },
+      |                {
+      |                 "name" : "p16",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
+      |                },
+      |                {
+      |                 "name" : "p17",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
+      |                },
+      |                {
+      |                 "name" : "p18",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
+      |                },
+      |                {
+      |                 "name" : "p19",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
+      |                },
+      |                {
+      |                 "name" : "p20",
+      |                  "db" : "db1_msk_gu",
+      |                  "proc" : "prm_salary.p1(refcur => ? ,sleepsec => 60)"
       |                }
       |              ]
       |             }
@@ -310,20 +361,16 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
               Task(compress(Printer.spaces2.print(failJson)))
             },
             checkOk => {
-              val seqDictDataRows: Task[List[DictDataRows]] = Task.foreachParN(20)(seqResDicts.dicts) { thisDict =>
-                DbExecutor.getDict(configuredDbList, thisDict)
-              }
               for {
-                ldr <- seqDictDataRows
-                str = DictsDataAccum(ldr)
+                seqDictDataRows <- ZIO.foreachPar/*N(40)*/(seqResDicts.dicts) { thisDict =>
+                  DbExecutor.getDict(configuredDbList, thisDict)
+                }
+                str = DictsDataAccum(seqDictDataRows)
               } yield compress(Printer.spaces2.print(str.asJson))
             }
           )
 
-        /**
-         * foreachPar    - Applies the function `f` to each element of the `Iterable[A]` in parallel, and returns the results in a new `List[B]`.
-         * collectAllPar - Evaluate each effect in the structure in parallel, and collect the results.
-        */
+
 
         // Common logic
         resEntity <- Task(HttpEntity(`application/json`.withParams(Map("charset" -> "UTF-8")), resString))

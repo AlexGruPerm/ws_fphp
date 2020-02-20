@@ -25,7 +25,11 @@ object DictRow {
 }
 
 @JsonCodec
-case class DictDataRows(name:String, durationMs: Long, rows : List[List[DictRow]])
+case class DictDataRows(name: String,
+                        connDurMs: Long,
+                        execDurMs: Long,
+                        fetchDurMs: Long,
+                        rows: List[List[DictRow]])
 
 @JsonCodec
 case class DictsDataAccum(dicts: List[DictDataRows])

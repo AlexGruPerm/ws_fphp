@@ -1,6 +1,7 @@
 package confs
 
 import java.io.File
+import java.util.Properties
 
 import zio.RIO
 import zio.Task
@@ -20,7 +21,16 @@ final case class DbConfig(
                            url: String,
                            username: String,
                            password: String
-                         )
+                         ){
+  def urlWithDb = url + dbname
+
+  def getJdbcProperties :Properties = {
+    val props = new Properties()
+    props.setProperty("user", username)
+    props.setProperty("password", password)
+    props
+  }
+}
 
 trait Configuration extends Serializable {
   val config: Configuration.Service[Any]

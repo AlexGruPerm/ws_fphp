@@ -21,3 +21,22 @@ CPUs only have a certain number of cores, each of which can execute tasks more o
 If we create more threads than cores, then the operating system spends a lot of time switching between threads
 (context switching), because the hardware can’t physically run them all at the same time. So ideally,
 to be maximally efficient, we would only create as many threads as there are cores, to minimize context switching.
+
+
+2) need return to client correct json with some types of errors, f.e.:
+ database "XXX" does not exist
+
+Fiber failed.
+A checked error was not handled.
+org.postgresql.util.PSQLException: FATAL: database "prm_salary" does not exist
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2440)
+	at org.postgresql.core.v3.QueryExecutorImpl.readStartupMessages(QueryExecutorImpl.java:2559)
+	at org.postgresql.core.v3.QueryExecutorImpl.<init>(QueryExecutorImpl.java:133)
+	at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:250)
+	at org.postgresql.core.ConnectionFactory.openConnection(ConnectionFactory.java:49)
+	at org.postgresql.jdbc.PgConnection.<init>(PgConnection.java:195)
+	at org.postgresql.Driver.makeConnection(Driver.java:454)
+	at org.postgresql.Driver.connect(Driver.java:256)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:677)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:189)
+	at dbconn.jdbcSession.$anonfun$createPgSess$2(PgConnection.scala:52)
