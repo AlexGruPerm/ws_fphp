@@ -16,7 +16,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
 import confs.{Config, DbConfig}
-import data.{DbErrorDesc, DictDataRows, DictRow, DictsDataAccum}
+import data.{DbErrorDesc, DictDataRows, DictRow, DictsDataAccum, RequestResult}
 import dbconn.{DbExecutor, PgConnection}
 import io.circe.generic.JsonCodec
 import io.circe.parser.parse
@@ -224,7 +224,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
                 }
               }.fold(
                 err =>  DbErrorDesc("error", err.getMessage, "method[routeDicts]", err.getClass.getName).asJson,
-                succ => DictsDataAccum(succ).asJson
+                succ => RequestResult("ok",DictsDataAccum(succ)).asJson//DictsDataAccum(succ).asJson
               )
             } yield compress(Printer.spaces2.print(str))
           )

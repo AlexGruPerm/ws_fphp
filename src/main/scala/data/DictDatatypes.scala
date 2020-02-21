@@ -35,4 +35,9 @@ case class DictDataRows(name: String,
 case class DictsDataAccum(dicts: List[DictDataRows])
 
 
+@JsonCodec
+case class RequestResult(status: String,
+                         data: DictsDataAccum)
+//todo: maybe add prefix in reponse, is it from cache or not!?
+
 
