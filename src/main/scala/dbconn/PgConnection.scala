@@ -43,10 +43,10 @@ trait jdbcSession {
   /**
    * Return Connection to Postgres or Exception
   */
-  def createPgSess: DbConfig => Task[pgSess] = dbconf =>
+  def createPgSess: (DbConfig,String) => Task[pgSess] = (dbconf,dictName) =>
     Task {
       val c :Connection = DriverManager.getConnection(dbconf.urlWithDb, dbconf.getJdbcProperties)
-      c.setClientInfo("ApplicationName",s"wsfphp")
+      c.setClientInfo("ApplicationName",s"wsfphp_$dictName")
       c.setAutoCommit(false)
       /*
       val stmt: Statement = c.createStatement
@@ -67,8 +67,8 @@ trait jdbcSession {
 class PgConnection extends jdbcSession {
 
   //todo: read PgConnectProp properties single time from input json.
-  val sess : DbConfig => Task[pgSess] = dbconf =>
-    createPgSess(dbconf)
+  val sess : (DbConfig,String) => Task[pgSess] = (dbconf,dictName) =>
+    createPgSess(dbconf,dictName)
 
 }
 

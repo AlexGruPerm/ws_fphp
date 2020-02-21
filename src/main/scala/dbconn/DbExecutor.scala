@@ -62,7 +62,7 @@ object DbExecutor {
           .mapError(_ => new NoSuchElementException(s"Database name [${trqDict.db}] not found in config."))
       tBeforeOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
       //todo: add Logging in env. and use it here with trace mode.
-      thisConnection <- (new PgConnection).sess(thisConfig)
+      thisConnection <- (new PgConnection).sess(thisConfig, trqDict.name)
       tAfterOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
       openConnDuration = (tAfterOpenConn - tBeforeOpenConn)
       ds: DictDataRows <- getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration)//.refineToOrDie[IOException] //todo: try pass it direct (new PgConnection).sess(thisConfig)
