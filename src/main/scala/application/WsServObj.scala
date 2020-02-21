@@ -96,7 +96,7 @@ object WsServObj {
     import ReqResp._
 
     val responseFuture: ZIO[ZEnv, Throwable, HttpResponse] =
-      request match {
+      request match {// m.b. future HttpMethods.OPTIONS for http/2
         case request@HttpRequest(HttpMethods.POST, Uri.Path("/dicts"), _, _, _) =>
       {
         val reqEntityString :Future[String] = Unmarshal(request.entity).to[String]
