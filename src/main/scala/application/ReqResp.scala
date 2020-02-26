@@ -137,9 +137,8 @@ object ReqResp {
   import akka.http.scaladsl.coding.{Encoder, Gzip }
   import akka.http.scaladsl.model._, headers.HttpEncodings
 
-  private def compress(input: String) :ByteString =
-    Gzip.encode(ByteString(input))
-  //ByteString(input)
+  private def compress(usingGzip: Int, input: String) :ByteString =
+    if (usingGzip==1) Gzip.encode(ByteString(input)) else ByteString(input)
 
   import io.circe.generic.auto._, io.circe.syntax._
   import scala.concurrent.duration._
@@ -210,7 +209,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
             checkErr => {
               val failJson =
                 DbErrorDesc("error", checkErr.getMessage, "Cause of exception", checkErr.getClass.getName).asJson
-              Task(compress(Printer.spaces2.print(failJson)))
+              Task(compress(seqResDicts.cont_encoding_gzip_enabled, Printer.spaces2.print(failJson)))
             },
             checkOk =>
               for {
@@ -226,7 +225,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
                 err =>  DbErrorDesc("error", err.getMessage, "method[routeDicts]", err.getClass.getName).asJson,
                 succ => RequestResult("ok",DictsDataAccum(succ)).asJson//DictsDataAccum(succ).asJson
               )
-            } yield compress(Printer.spaces2.print(str))
+            } yield compress(seqResDicts.cont_encoding_gzip_enabled, Printer.spaces2.print(str))
           )
 
 
@@ -235,8 +234,11 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
         resEntity <- Task(HttpEntity(`application/json`.withParams(Map("charset" -> "UTF-8")), resString))
         httpResp <- Task(HttpResponse(StatusCodes.OK, entity = resEntity))
 
-        //todo: bug fixing, we need control from client where user or not gzip compression.
-        httpRespWithHeaders = httpResp.addHeader(`Content-Encoding`(HttpEncodings.gzip))
+        httpRespWithHeaders =
+        if (seqResDicts.cont_encoding_gzip_enabled == 1)
+          httpResp.addHeader(`Content-Encoding`(HttpEncodings.gzip))
+        else
+          httpResp
 
         resFromFuture <- ZIO.fromFuture { implicit ec =>
           Future.successful(httpRespWithHeaders).flatMap {

@@ -1,3 +1,11 @@
+
+js ajax request timeout
+
+                xhr.setRequestHeader("Content-Type", "application/json");
+                /*xhr.timeout = 3000;*/
+                xhr.onreadystatechange = function() {
+
+
 On PHP side:
 
 prm_test/src/analytics/rep_01_1/classes
