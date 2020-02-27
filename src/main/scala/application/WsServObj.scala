@@ -130,7 +130,7 @@ object WsServObj {
     (cache, conf, actorSystem) => {
     implicit val system: ActorSystem = actorSystem
     import scala.concurrent.duration._
-    implicit val timeout: Timeout = Timeout(60 seconds)
+    implicit val timeout: Timeout = Timeout(120 seconds)
     implicit val executionContext: ExecutionContextExecutor = system.dispatcher
     import akka.stream.scaladsl.Source
       for {

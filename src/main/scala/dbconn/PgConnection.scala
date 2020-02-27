@@ -5,10 +5,7 @@ import java.util.Properties
 
 import confs.DbConfig
 import org.postgresql.util.PSQLException
-import org.slf4j.LoggerFactory
 import zio.Task
-
-case class pgSess(sess : Connection, pid : Int)
 
 /**
  * Info:
@@ -37,13 +34,14 @@ case class pgSess(sess : Connection, pid : Int)
  *
 */
 
-trait jdbcSession {
-  val logger = LoggerFactory.getLogger(getClass.getName)
+/**
+ *  Singleton object that keep db connection.
+*/
+//todo: what if make it object ???
+class PgConnection  {
 
-  /**
-   * Return Connection to Postgres or Exception
-  */
-  def createPgSess: (DbConfig,String) => Task[pgSess] = (dbconf,dictName) =>
+  //todo: read PgConnectProp properties single time from input json.
+  val sess : (DbConfig,String) => Task[pgSess] = (dbconf,dictName) =>
     Task {
       val c :Connection = DriverManager.getConnection(dbconf.urlWithDb, dbconf.getJdbcProperties)
       c.setClientInfo("ApplicationName",s"wsfphp_$dictName")
@@ -57,18 +55,6 @@ trait jdbcSession {
       */
       pgSess(c,0/*pg_backend_pid*/)
     }.refineToOrDie[PSQLException]
-
-}
-
-/**
- *  Singleton object that keep db connection.
-*/
-//todo: what if make it object ???
-class PgConnection extends jdbcSession {
-
-  //todo: read PgConnectProp properties single time from input json.
-  val sess : (DbConfig,String) => Task[pgSess] = (dbconf,dictName) =>
-    createPgSess(dbconf,dictName)
 
 }
 

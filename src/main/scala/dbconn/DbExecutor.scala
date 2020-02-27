@@ -27,6 +27,8 @@ import zio.blocking._
 
 object DbExecutor {
 
+  val pgPool = new PgConnectionPool
+
   private def getCursorData(beginTs: Long, conn: pgSess,dict: Dict,openConnDur: Long) : Task[DictDataRows] = {
     val stmt = conn.sess.prepareCall(s"{call ${dict.proc} }")
     stmt.setNull(1, Types.OTHER)
@@ -62,11 +64,18 @@ object DbExecutor {
           .mapError(_ => new NoSuchElementException(s"Database name [${trqDict.db}] not found in config."))
       tBeforeOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
       //todo: add Logging in env. and use it here with trace mode.
-      thisConnection <- (new PgConnection).sess(thisConfig, trqDict.name)
+      //connections without pool.
+      //thisConnection <- (new PgConnection).sess(thisConfig, trqDict.name)
+      //connections with pool.
+      thisConnection <- pgPool.sess(thisConfig)
+      //sess <- thisConnection.sess
+
       tAfterOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
-      openConnDuration = (tAfterOpenConn - tBeforeOpenConn)
-      ds: DictDataRows <- getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration)//.refineToOrDie[IOException] //todo: try pass it direct (new PgConnection).sess(thisConfig)
-      _ = thisConnection.sess.close()
+      openConnDuration = tAfterOpenConn - tBeforeOpenConn
+      ds: DictDataRows <- getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration) //todo: try pass it direct (new PgConnection).sess(thisConfig)
+      // _ = thisConnection.sess.close()
+      // _ = thisConnection.sess.commit
+      _ = thisConnection.sess.close() //If this connection was obtained from a pooled data source, then it won't actually be closed, it'll just be returned to the pool.
     } yield ds
 
 }

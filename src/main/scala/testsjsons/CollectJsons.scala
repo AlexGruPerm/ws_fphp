@@ -682,6 +682,11 @@ object CollectJsons {
       |                  "proc" : "prm_salary.pkg_web_cons_rep_krai_grbs_list(refcur => ?, p_user_id => 45224506)"
       |                },
       |                {
+      |                 "name"  : "krai_oiv2",
+      |                  "db"   : "db1",
+      |                  "proc" : "prm_salary.pkg_web_cons_rep_krai_grbs_list(refcur => ?, p_user_id => 45224506)"
+      |                },
+      |                {
       |                 "name"  : "count_group",
       |                  "db"   : "db1",
       |                  "proc" : "prm_salary.pkg_web_form_rep_count_group_list(refcur => ?)"
@@ -693,6 +698,11 @@ object CollectJsons {
       |                },
       |                {
       |                 "name"  : "industry_class",
+      |                  "db"   : "db1",
+      |                  "proc" : "prm_salary.pkg_web_cons_rep_industry_class_list(refcur => ?)"
+      |                },
+      |                {
+      |                 "name"  : "industry_class2",
       |                  "db"   : "db1",
       |                  "proc" : "prm_salary.pkg_web_cons_rep_industry_class_list(refcur => ?)"
       |                },
@@ -713,6 +723,11 @@ object CollectJsons {
       |                },
       |                {
       |                 "name"  : "okfs",
+      |                  "db"   : "db1",
+      |                  "proc" : "prm_salary.pkg_web_cons_rep_okfs_list(refcur => ?)"
+      |                },
+      |                {
+      |                 "name"  : "okfs2",
       |                  "db"   : "db1",
       |                  "proc" : "prm_salary.pkg_web_cons_rep_okfs_list(refcur => ?)"
       |                },

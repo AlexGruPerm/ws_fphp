@@ -1,0 +1,46 @@
+package dbconn
+
+import java.net.URI
+import java.sql.{Connection, DriverManager}
+
+import confs.DbConfig
+import org.apache.commons.dbcp2.BasicDataSource
+import org.postgresql.util.PSQLException
+import zio.{Task, ZIO}
+import zio.blocking._
+
+class PgConnectionPool() {
+
+  println("NEW OBJECT PgConnectionPool ############################################ ")
+
+  //todo: create personal pool with size from config for db-config.name and size.
+  val dbUrl = s"jdbc:postgresql://172.17.100.53/db_ris_mkrpk"
+  val connectionPool = new BasicDataSource()
+  connectionPool.setUsername("prm_salary")
+  connectionPool.setPassword("prm_salary")
+  connectionPool.setDriverClassName("org.postgresql.Driver")
+  connectionPool.setUrl(dbUrl)
+  connectionPool.setDefaultAutoCommit(false)
+  connectionPool.setMaxTotal(30)
+   //connectionPool.setValidationQuery("select pg_backend_pid() as pg_backend_pid")
+  connectionPool.setInitialSize(20)
+
+  connectionPool.setRemoveAbandonedOnBorrow(true)
+  connectionPool.setRemoveAbandonedTimeout(5)//Timeout in seconds before an abandoned connection can be removed.
+  connectionPool.setLogAbandoned(true)
+  /**
+   * The maximum number of milliseconds that the pool will wait (when there are no available connections)
+   * for a connection to be returned before throwing an exception
+  */
+  connectionPool.setMaxWaitMillis(3000L)
+  //https://commons.apache.org/proper/commons-dbcp/configuration.html
+
+  def sess : DbConfig => Task[pgSess] = dbconf =>
+    Task {
+      val c :Connection = connectionPool/*dbconf.xxxxx*/.getConnection
+      c.setClientInfo("ApplicationName","wsfphp")
+      //c.setAutoCommit(false)
+      pgSess(c,0)
+    }.refineToOrDie[PSQLException]
+
+}
