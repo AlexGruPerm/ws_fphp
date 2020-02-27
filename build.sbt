@@ -29,6 +29,8 @@ resolvers ++= Seq(
 
 //paradise for using circe annotations, f.e. @JsonCodec case class DbErrorDesc
 resolvers += Resolver.sonatypeRepo("releases")
+resolvers += Resolver.sonatypeRepo("public")
+
 addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 
 libraryDependencies ++= Seq(
@@ -47,8 +49,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-stream" % Versions.akka,
   "com.typesafe.akka" %% "akka-http" % Versions.akkaHttp,
   "com.typesafe.akka" %% "akka-actor-typed" % Versions.akka,
-  "com.typesafe.akka" %% "akka-slf4j" % Versions.akka,
-  "com.typesafe.akka" %% "akka-http2-support" % Versions.akka
+  "com.typesafe.akka" %% "akka-slf4j" % Versions.akka
 )
 
 libraryDependencies ++= Seq(

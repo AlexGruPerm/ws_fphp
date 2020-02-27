@@ -17,8 +17,10 @@ import logging.LoggerCommon._
 object Main extends zio.App {
 
   private val checkArgs : List[String] => Task[Unit] = args => for {
-    checkRes <- if (args.length < 0) Task.fail(new IllegalArgumentException("Need config file as parameter."))
-    else UIO.succeed(())
+    checkRes <- if (args.length < 0) {
+      Task.fail(new IllegalArgumentException("Need config file as parameter."))}
+    else {UIO.succeed(())
+    }
   } yield checkRes
 
 

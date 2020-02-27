@@ -40,4 +40,11 @@ case class RequestResult(status: String,
                          data: DictsDataAccum)
 //todo: maybe add prefix in reponse, is it from cache or not!?
 
+/**
+ * class for cache entity.
+ * Summary application cache contains List(CacheEntity)
+ * One cache entity ~= one dictionary - DictDataRows
+*/
+case class CacheEntity(orderNum: Int, ts: Long, data: DictDataRows)
+
 
