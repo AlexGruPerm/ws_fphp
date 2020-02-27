@@ -668,7 +668,7 @@ object CollectJsons {
       |             }
       |""".stripMargin
 
-  val reqJsonText_ =
+  val reqJsonText___ =
     """
       |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
       |                "cont_encoding_gzip_enabled" : 0,
@@ -731,6 +731,24 @@ object CollectJsons {
       |                  "db"   : "db1",
       |                  "proc" : "prm_salary.pkg_web_cons_rep_okfs_list(refcur => ?)"
       |                },
+      |                {
+      |                 "name"  : "institution",
+      |                  "db"   : "db1",
+      |                  "proc" : "prm_salary.pkg_web_cons_rep_institution_list(refcur => ?, p_user_id => 45224506)"
+      |                }
+      |              ]
+      |             }
+      |""".stripMargin
+
+
+  val reqJsonText_ =
+    """
+      |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
+      |                "cont_encoding_gzip_enabled" : 0,
+      |                 "thread_pool" : "block",
+      |                 "request_timeout_ms": 5000,
+      |                 "cache_live_time" : 60000,
+      |                "dicts": [
       |                {
       |                 "name"  : "institution",
       |                  "db"   : "db1",
