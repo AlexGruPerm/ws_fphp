@@ -38,7 +38,7 @@ case class DictsDataAccum(dicts: List[DictDataRows])
 @JsonCodec
 case class RequestResult(status: String,
                          data: DictsDataAccum)
-//todo: maybe add prefix in reponse, is it from cache or not!?
+//todo: maybe add prefix in response, is it from cache or not!?
 
 /**
  * class for cache entity.
@@ -46,5 +46,10 @@ case class RequestResult(status: String,
  * One cache entity ~= one dictionary - DictDataRows
 */
 case class CacheEntity(orderNum: Int, ts: Long, data: DictDataRows)
+
+object CacheEntity{
+   def apply(orderNum: Int, data: DictDataRows): CacheEntity =
+    new CacheEntity(orderNum, System.currentTimeMillis, data)
+}
 
 

@@ -16,7 +16,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
 import confs.{Config, DbConfig}
-import data.{DbErrorDesc, DictDataRows, DictRow, DictsDataAccum, RequestResult}
+import data.{CacheEntity, DbErrorDesc, DictDataRows, DictRow, DictsDataAccum, RequestResult}
 import dbconn.{DbExecutor, PgConnection}
 import io.circe.generic.JsonCodec
 import io.circe.parser.parse
@@ -180,23 +180,24 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
         accumRes <-
           ZIO.foreachPar(reqListDb) { thisDb =>
             configuredDbList.find(_.name == thisDb) match {
-              case Some(_) => ZIO.succeed(None)
-              case None => ZIO.succeed(Some(s"DB [$thisDb] from request not found in config file application.conf"))
+              case Some(_) => ZIO.none
+              case None => ZIO.some(s"DB [$thisDb] from request not found in config file application.conf")
             }
           }
         _ <- logChecker.log(LogLevel.Error)("error message here")
         _ <- logChecker.locallyAnnotate(correlationId, "db_conf_checker") {
           ZIO.foreach(accumRes.flatten)(thisErrLine => log(LogLevel.Error)(thisErrLine))
         }
-        checkResult <- if (accumRes.flatten.nonEmpty)
+        checkResult <- if (accumRes.flatten.nonEmpty) {
           Task.fail(
             NoConfigureDbInRequest(accumRes.flatten.head)
           )
-        else UIO.succeed(())
+        } else {UIO.succeed(())
+        }
       } yield checkResult //UIO.succeed(())
 
   import zio.blocking._
-  val routeDicts: (HttpRequest, Ref[Int], List[DbConfig], Future[String]) => ZIO[ZEnv, Throwable, HttpResponse] =
+  val routeDicts: (HttpRequest, Ref[CacheEntity], List[DbConfig], Future[String]) => ZIO[ZEnv, Throwable, HttpResponse] =
     (request, cache, configuredDbList, reqEntity) =>
       for {
         _ <- logRequest(request)
@@ -216,29 +217,28 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
               str <- ZIO.foreachPar(seqResDicts.dicts){ thisDict =>
                 if (seqResDicts.thread_pool == "block") {
                   //run in separate blocking pool, "unlimited" thread count
-                  blocking(DbExecutor.getDict(configuredDbList, thisDict))
+                  blocking(DbExecutor.getDict(configuredDbList, thisDict, cache))
                 } else {
                   //run on sync pool, count of threads equal CPU.cores*2 (cycle)
-                  DbExecutor.getDict(configuredDbList, thisDict)
+                  DbExecutor.getDict(configuredDbList, thisDict, cache)
                 }
               }.fold(
                 err =>  DbErrorDesc("error", err.getMessage, "method[routeDicts]", err.getClass.getName).asJson,
-                succ => RequestResult("ok",DictsDataAccum(succ)).asJson//DictsDataAccum(succ).asJson
+                succ => RequestResult("ok",DictsDataAccum(succ)).asJson
               )
             } yield compress(seqResDicts.cont_encoding_gzip_enabled, Printer.spaces2.print(str))
           )
-
-
 
         // Common logic
         resEntity <- Task(HttpEntity(`application/json`.withParams(Map("charset" -> "UTF-8")), resString))
         httpResp <- Task(HttpResponse(StatusCodes.OK, entity = resEntity))
 
         httpRespWithHeaders =
-        if (seqResDicts.cont_encoding_gzip_enabled == 1)
+        if (seqResDicts.cont_encoding_gzip_enabled == 1) {
           httpResp.addHeader(`Content-Encoding`(HttpEncodings.gzip))
-        else
+        } else {
           httpResp
+        }
 
         resFromFuture <- ZIO.fromFuture { implicit ec =>
           Future.successful(httpRespWithHeaders).flatMap {
@@ -260,7 +260,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
     UIO.unit
 
   //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
-  val routeGetDebug: (HttpRequest, Ref[Int]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
+  val routeGetDebug: (HttpRequest, Ref[CacheEntity]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
     strDebugForm <- openFile(
       "C:\\ws_fphp\\src\\main\\resources\\debug_post.html"
       //"C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\debug_post.html"
@@ -269,11 +269,14 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
       Task(file.getLines.mkString.replace("req_json_text", CollectJsons.reqJsonText_))
     }
     _ <- logRequest(request)
+
+    /*
     cvb <- cache.get
     _ <- putStrLn(s"BEFORE(debug): cg=$cvb")
     _ <- cache.update(_ + 3)
     cva <- cache.get
     _ <- putStrLn(s"AFTER(debug): cg=$cva")
+    */
 
     f <- ZIO.fromFuture { implicit ec =>
       Future.successful(HttpResponse(StatusCodes.OK, entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)))

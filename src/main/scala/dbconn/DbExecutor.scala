@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 import java.util.NoSuchElementException
 
 import confs.DbConfig
-import data.{DictDataRows, DictRow}
+import data.{CacheEntity, DictDataRows, DictRow}
 import org.postgresql.jdbc.PgResultSet
 import io.circe.generic.auto._
 import io.circe.syntax._
@@ -16,15 +16,13 @@ import reqdata.Dict
 import zio.clock.Clock
 import zio.console.putStrLn
 import zio.logging.{LogLevel, Logging, log}
-import zio.{DefaultRuntime, Task, UIO, ZEnv, ZIO, clock}
+import zio.{DefaultRuntime, Ref, Task, UIO, ZEnv, ZIO, clock}
 
 
 //  loggetDict <- ZIO.access[Logging](_.logger)
 //  _ <- loggetDict.locallyAnnotate(correlationId, "db_get_dict") {
 //    log(LogLevel.Debug)(s"Connection opened for ${thisConfig.name} begin req ${trqDict.name}"/*conn.environment.connection.getClientInfo()*/)
 //  }
-
-import zio.blocking._
 
 object DbExecutor {
 
@@ -51,15 +49,15 @@ object DbExecutor {
       DictDataRows(
         dict.name,
         openConnDur,
-        (afterExecTs - beginTs),
-        (System.currentTimeMillis - afterExecTs),
+        afterExecTs - beginTs,
+        System.currentTimeMillis - afterExecTs,
         rows
     )
     )
   }
 
   import zio.blocking._
-  val getDict: (List[DbConfig], Dict) => ZIO[ZEnv,Throwable,DictDataRows] = (configuredDbList, trqDict) =>
+  val getDict: (List[DbConfig], Dict, Ref[CacheEntity]) => ZIO[ZEnv,Throwable,DictDataRows] = (configuredDbList, trqDict, cache) =>
     for {
       thisConfig <- ZIO.fromOption(configuredDbList.find(dbc => dbc.name == trqDict.db))
           .mapError(_ => new NoSuchElementException(s"Database name [${trqDict.db}] not found in config."))
@@ -75,9 +73,15 @@ object DbExecutor {
 
       tAfterOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
       openConnDuration = tAfterOpenConn - tBeforeOpenConn
-      ds: DictDataRows <- getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration) //todo: try pass it direct (new PgConnection).sess(thisConfig)
+      //todo: try pass it direct (new PgConnection).sess(thisConfig)
+      ds: DictDataRows <- getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration)
+
+      //if we update cache then set new parts.
+      _ <- cache.update(cv => cv.copy(orderNum = cv.orderNum + 1, System.currentTimeMillis , ds))
+
       //we absolutely need close it to return to the pool
-      _ = thisConnection.sess.close() //If this connection was obtained from a pooled data source, then it won't actually be closed, it'll just be returned to the pool.
+      _ = thisConnection.sess.close()
+      //If this connection was obtained from a pooled data source, then it won't actually be closed, it'll just be returned to the pool.
     } yield ds
 
 }

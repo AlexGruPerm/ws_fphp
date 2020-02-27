@@ -750,9 +750,9 @@ object CollectJsons {
       |                 "cache_live_time" : 60000,
       |                "dicts": [
       |                {
-      |                 "name"  : "institution",
+      |                 "name"  : "litener_notify",
       |                  "db"   : "db1",
-      |                  "proc" : "prm_salary.pkg_web_cons_rep_institution_list(refcur => ?, p_user_id => 45224506)"
+      |                  "proc" : "prm_salary.pkg_web_litener_notify(refcur => ?, p_user_id => 45224506)"
       |                }
       |              ]
       |             }

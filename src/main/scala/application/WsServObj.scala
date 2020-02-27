@@ -9,6 +9,7 @@ import akka.http.scaladsl.settings.{ClientConnectionSettings, ConnectionPoolSett
 import akka.util.Timeout
 import application.WsServObj.CommonTypes.IncConnSrvBind
 import confs.{Config, DbConfig}
+import data.{CacheEntity, DictDataRows}
 import logging.LoggerCommon._
 import zio.logging.{LogLevel, log}
 import zio._
@@ -22,13 +23,18 @@ object WsServObj {
   /**
    *
    */
-  private val cacheChecker: Ref[Int] => ZIO[ZEnv, Nothing, Unit] = cache =>
+  private val cacheChecker: Ref[CacheEntity] => ZIO[ZEnv, Nothing, Unit] = cache =>
     for {
        cacheCurrentValue <- cache.get
       _  <- zio.logging.locallyAnnotate(correlationId,"cache_checker"){
         log(LogLevel.Debug)(s"cacheCurrentValue = $cacheCurrentValue")
+        /*
+        IO.foreach(cacheCurrentValue.){ce =>
+          log(LogLevel.Debug)(s"cacheCurrentValue = $cacheCurrentValue")
+        }
+        */
       }.provideSomeM(env)
-      _ <- cache.update(_ + 1)
+      _ <- cache.update(cv => cv.copy(orderNum = cv.orderNum + 1, cv.ts, cv.data))//todo: remove.
     } yield ()
 
 
@@ -43,16 +49,16 @@ object WsServObj {
     val wsRes = Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
         for {
-          cache <- Ref.make(0)
+          //cache <- Ref.make(0)
+          cache <- Ref.make(CacheEntity(0,DictDataRows("no name",0,0,0,List(List()))))
           cacheInitialValue <- cache.get
-
           _  <- zio.logging.locallyAnnotate(correlationId,"wsserver"){
             log(LogLevel.Info)(s"Before startRequestHandler. Cache created with $cacheInitialValue")
           }.provideSomeM(env)
 
           fiber <- startRequestHandler(cache, conf, actorSystem).fork
           _ <- fiber.join
-          _ <- cacheChecker(cache).repeat(Schedule.spaced(2.second))
+          _ <- cacheChecker(cache).repeat(Schedule.spaced(5.second))
 
           _  <- zio.logging.locallyAnnotate(correlationId,"wsserver"){
             log(LogLevel.Info)("After startRequestHandler, end of WsServer.")
@@ -86,7 +92,7 @@ object WsServObj {
   /**
    * dbConfigList are registered list of databases from config file - application.conf
   */
-  def reqHandlerM(dbConfigList: List[DbConfig], actorSystem: ActorSystem, cache: Ref[Int])(request: HttpRequest):
+  def reqHandlerM(dbConfigList: List[DbConfig], actorSystem: ActorSystem, cache: Ref[CacheEntity])(request: HttpRequest):
   Future[HttpResponse] = {
     implicit val system: ActorSystem = actorSystem
     import scala.concurrent.duration._
@@ -126,7 +132,7 @@ object WsServObj {
    * (handler: HttpRequest => Future[HttpResponse])
    *
    */
-  val startRequestHandler: (Ref[Int], Config, ActorSystem) => ZIO[ZEnv, Throwable, Future[Done]] =
+  val startRequestHandler: (Ref[CacheEntity], Config, ActorSystem) => ZIO[ZEnv, Throwable, Future[Done]] =
     (cache, conf, actorSystem) => {
     implicit val system: ActorSystem = actorSystem
     import scala.concurrent.duration._
