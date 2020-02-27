@@ -11,6 +11,7 @@ import org.postgresql.jdbc.PgResultSet
 import io.circe.generic.auto._
 import io.circe.syntax._
 import logging.LoggerCommon.correlationId
+import org.postgresql.util.PSQLException
 import reqdata.Dict
 import zio.clock.Clock
 import zio.console.putStrLn
@@ -66,15 +67,16 @@ object DbExecutor {
       //todo: add Logging in env. and use it here with trace mode.
       //connections without pool.
       //thisConnection <- (new PgConnection).sess(thisConfig, trqDict.name)
+
       //connections with pool.
-      thisConnection <- pgPool.sess(thisConfig)
-      //sess <- thisConnection.sess
+      //thisConnection <- pgPool.sess(thisConfig,trqDict)
+      //todo: compare here, effect, effectBlocking or may be lock(ec)
+      thisConnection <- effectBlocking(pgPool.sess(thisConfig,trqDict)).refineToOrDie[PSQLException]
 
       tAfterOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
       openConnDuration = tAfterOpenConn - tBeforeOpenConn
       ds: DictDataRows <- getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration) //todo: try pass it direct (new PgConnection).sess(thisConfig)
-      // _ = thisConnection.sess.close()
-      // _ = thisConnection.sess.commit
+      //we absolutely need close it to return to the pool
       _ = thisConnection.sess.close() //If this connection was obtained from a pooled data source, then it won't actually be closed, it'll just be returned to the pool.
     } yield ds
 
