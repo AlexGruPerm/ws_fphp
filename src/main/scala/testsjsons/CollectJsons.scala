@@ -747,7 +747,6 @@ object CollectJsons {
       |                "cont_encoding_gzip_enabled" : 0,
       |                 "thread_pool" : "block",
       |                 "request_timeout_ms": 5000,
-      |                 "cache_live_time" : 60000,
       |                "dicts": [
       |                {
       |                 "name"  : "litener_notify",

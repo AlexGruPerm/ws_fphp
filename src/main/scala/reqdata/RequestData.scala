@@ -13,8 +13,7 @@ import io.circe.generic.JsonCodec
 @JsonCodec
 case class Dict(name: String,
                 db:String,
-                proc: String,
-                cache_live_time: Option[Long])
+                proc: String)
 
 /**
  * for all dicts requested and additional information.

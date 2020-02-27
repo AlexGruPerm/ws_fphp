@@ -74,7 +74,7 @@ object ReqResp {
         _ <- log(LogLevel.Trace)(s"session_id = ${rd.user_session}")
         _ <- log(LogLevel.Trace)(s"encoding_gzip = ${rd.cont_encoding_gzip_enabled}")
         _ <- URIO.foreach(rd.dicts)(d => log(LogLevel.Trace)
-             (s"dict = ${d.db} - ${d.proc} cache = ${d.cache_live_time}"))
+             (s"dict = ${d.db} - ${d.proc} "))
         _ <- log(LogLevel.Trace)("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
       } yield ()
     }.provideSomeM(env)
