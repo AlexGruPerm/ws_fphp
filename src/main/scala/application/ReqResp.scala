@@ -16,7 +16,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
 import confs.{Config, DbConfig}
-import data.{CacheEntity, DbErrorDesc, DictDataRows, DictRow, DictsDataAccum, RequestResult}
+import data.{Cache, CacheEntity, DbErrorDesc, DictDataRows, DictRow, DictsDataAccum, RequestResult}
 import dbconn.{DbExecutor, PgConnection}
 import io.circe.generic.JsonCodec
 import io.circe.parser.parse
@@ -197,7 +197,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
       } yield checkResult //UIO.succeed(())
 
   import zio.blocking._
-  val routeDicts: (HttpRequest, Ref[CacheEntity], List[DbConfig], Future[String]) => ZIO[ZEnv, Throwable, HttpResponse] =
+  val routeDicts: (HttpRequest, Ref[Cache], List[DbConfig], Future[String]) => ZIO[ZEnv, Throwable, HttpResponse] =
     (request, cache, configuredDbList, reqEntity) =>
       for {
         _ <- logRequest(request)
@@ -260,7 +260,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
     UIO.unit
 
   //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
-  val routeGetDebug: (HttpRequest, Ref[CacheEntity]) => ZIO[ZEnv, Throwable, HttpResponse] = (request, cache) => for {
+  val routeGetDebug: (HttpRequest) => ZIO[ZEnv, Throwable, HttpResponse] = request => for {
     strDebugForm <- openFile(
       "C:\\ws_fphp\\src\\main\\resources\\debug_post.html"
       //"C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\debug_post.html"

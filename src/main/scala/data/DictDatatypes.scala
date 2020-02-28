@@ -1,7 +1,9 @@
 package data
 
+import akka.util.ByteString
 import io.circe.generic.JsonCodec
-import io.circe.generic.auto._, io.circe.syntax._
+import io.circe.generic.auto._
+import io.circe.syntax._
 
 @JsonCodec
 case class DictRow(name: String, value: String)
@@ -40,16 +42,26 @@ case class RequestResult(status: String,
                          data: DictsDataAccum)
 //todo: maybe add prefix in response, is it from cache or not!?
 
+
+case class CacheEntity(ts: Long, dictStr: ByteString)
+
+object CacheEntity {
+   def apply(data: ByteString): CacheEntity =
+    new CacheEntity(System.currentTimeMillis, data)
+}
+
 /**
- * class for cache entity.
+ * class for cache entity instance.
  * Summary application cache contains List(CacheEntity)
  * One cache entity ~= one dictionary - DictDataRows
 */
-case class CacheEntity(orderNum: Int, ts: Long, data: DictDataRows)
-
-object CacheEntity{
-   def apply(orderNum: Int, data: DictDataRows): CacheEntity =
-    new CacheEntity(orderNum, System.currentTimeMillis, data)
+case class Cache(HeartbeatCounter: Int, dictsMap: Map[Int, CacheEntity])
+/*
+object Cache{
+   def apply(HeartbeatCounter: Int, dict: Map[Int, CacheEntity]): Cache =
+    new Cache(HeartbeatCounter, dict)
 }
+*/
+
 
 

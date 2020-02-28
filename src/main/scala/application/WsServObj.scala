@@ -6,10 +6,10 @@ import akka.http.scaladsl.Http.{IncomingConnection, ServerBinding}
 import akka.http.scaladsl._
 import akka.http.scaladsl.model.{HttpRequest, _}
 import akka.http.scaladsl.settings.{ClientConnectionSettings, ConnectionPoolSettings}
-import akka.util.Timeout
+import akka.util.{ByteString, Timeout}
 import application.WsServObj.CommonTypes.IncConnSrvBind
 import confs.{Config, DbConfig}
-import data.{CacheEntity, DictDataRows}
+import data.{Cache, CacheEntity, DictDataRows}
 import logging.LoggerCommon._
 import zio.logging.{LogLevel, log}
 import zio._
@@ -23,7 +23,7 @@ object WsServObj {
   /**
    *
    */
-  private val cacheChecker: Ref[CacheEntity] => ZIO[ZEnv, Nothing, Unit] = cache =>
+  private val cacheChecker: Ref[Cache] => ZIO[ZEnv, Nothing, Unit] = cache =>
     for {
        cacheCurrentValue <- cache.get
       _  <- zio.logging.locallyAnnotate(correlationId,"cache_checker"){
@@ -34,7 +34,7 @@ object WsServObj {
         }
         */
       }.provideSomeM(env)
-      _ <- cache.update(cv => cv.copy(orderNum = cv.orderNum + 1, cv.ts, cv.data))//todo: remove.
+      _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1))//todo: remove.
     } yield ()
 
 
@@ -50,7 +50,7 @@ object WsServObj {
       actorSystem =>
         for {
           //cache <- Ref.make(0)
-          cache <- Ref.make(CacheEntity(0,DictDataRows("no name",0,0,0,List(List()))))
+          cache <- Ref.make(Cache(0,Map(0 -> CacheEntity(ByteString("-")))))
           cacheInitialValue <- cache.get
           _  <- zio.logging.locallyAnnotate(correlationId,"wsserver"){
             log(LogLevel.Info)(s"Before startRequestHandler. Cache created with $cacheInitialValue")
@@ -92,7 +92,7 @@ object WsServObj {
   /**
    * dbConfigList are registered list of databases from config file - application.conf
   */
-  def reqHandlerM(dbConfigList: List[DbConfig], actorSystem: ActorSystem, cache: Ref[CacheEntity])(request: HttpRequest):
+  def reqHandlerM(dbConfigList: List[DbConfig], actorSystem: ActorSystem, cache: Ref[Cache])(request: HttpRequest):
   Future[HttpResponse] = {
     implicit val system: ActorSystem = actorSystem
     import scala.concurrent.duration._
@@ -110,7 +110,7 @@ object WsServObj {
       }
         case request@HttpRequest(HttpMethods.GET, _, _, _, _) =>
           request match {
-            case request@HttpRequest(_, Uri.Path("/debug"), _, _, _) => routeGetDebug(request, cache)
+            case request@HttpRequest(_, Uri.Path("/debug"), _, _, _) => routeGetDebug(request)
             case request@HttpRequest(_, Uri.Path("/favicon.ico"), _, _, _) => routeGetFavicon(request)
           }
         case request: HttpRequest => {
@@ -132,7 +132,7 @@ object WsServObj {
    * (handler: HttpRequest => Future[HttpResponse])
    *
    */
-  val startRequestHandler: (Ref[CacheEntity], Config, ActorSystem) => ZIO[ZEnv, Throwable, Future[Done]] =
+  val startRequestHandler: (Ref[Cache], Config, ActorSystem) => ZIO[ZEnv, Throwable, Future[Done]] =
     (cache, conf, actorSystem) => {
     implicit val system: ActorSystem = actorSystem
     import scala.concurrent.duration._

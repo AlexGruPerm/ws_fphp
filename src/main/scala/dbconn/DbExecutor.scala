@@ -5,8 +5,10 @@ import java.sql.Types
 import java.util.concurrent.TimeUnit
 import java.util.NoSuchElementException
 
+import akka.util.ByteString
 import confs.DbConfig
-import data.{CacheEntity, DictDataRows, DictRow}
+import data.{Cache, CacheEntity, DictDataRows, DictRow}
+import io.circe.Printer
 import org.postgresql.jdbc.PgResultSet
 import io.circe.generic.auto._
 import io.circe.syntax._
@@ -57,7 +59,7 @@ object DbExecutor {
   }
 
   import zio.blocking._
-  val getDict: (List[DbConfig], Dict, Ref[CacheEntity]) => ZIO[ZEnv,Throwable,DictDataRows] = (configuredDbList, trqDict, cache) =>
+  val getDict: (List[DbConfig], Dict, Ref[Cache]) => ZIO[ZEnv,Throwable,DictDataRows] = (configuredDbList, trqDict, cache) =>
     for {
       thisConfig <- ZIO.fromOption(configuredDbList.find(dbc => dbc.name == trqDict.db))
           .mapError(_ => new NoSuchElementException(s"Database name [${trqDict.db}] not found in config."))
@@ -76,8 +78,10 @@ object DbExecutor {
       //todo: try pass it direct (new PgConnection).sess(thisConfig)
       ds: DictDataRows <- getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration)
 
-      //if we update cache then set new parts.
-      _ <- cache.update(cv => cv.copy(orderNum = cv.orderNum + 1, System.currentTimeMillis , ds))
+      //if try take element from cache, if not exists than execute db query and save into cache.
+      _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1,
+        dictsMap = Map(0 -> CacheEntity(System.currentTimeMillis,ByteString(Printer.spaces2.print(ds.asJson)))))
+      )
 
       //we absolutely need close it to return to the pool
       _ = thisConnection.sess.close()
