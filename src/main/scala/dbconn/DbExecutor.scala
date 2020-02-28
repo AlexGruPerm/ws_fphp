@@ -2,6 +2,7 @@ package dbconn
 
 import java.io.IOException
 import java.sql.Types
+import java.util
 import java.util.concurrent.TimeUnit
 import java.util.NoSuchElementException
 
@@ -18,7 +19,7 @@ import reqdata.Dict
 import zio.clock.Clock
 import zio.console.putStrLn
 import zio.logging.{LogLevel, Logging, log}
-import zio.{DefaultRuntime, Ref, Task, UIO, ZEnv, ZIO, clock}
+import zio.{DefaultRuntime, IO, Ref, Task, UIO, ZEnv, ZIO, clock}
 
 
 //  loggetDict <- ZIO.access[Logging](_.logger)
@@ -58,6 +59,22 @@ object DbExecutor {
     )
   }
 
+  private def getValueFromCache(hashKey: Int, cache: Ref[Cache]): Task[Option[CacheEntity]] =
+    for {
+      dsCache <- cache.get
+      ds      = dsCache.dictsMap.get(0)
+    } yield ds
+
+  private def updateValueInCache(hashKey: Int, cache: Ref[Cache], ds: Task[DictDataRows]) :Task[Unit] =
+    for {
+    dictRows <- ds
+    _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1,
+      dictsMap = Map(0 -> CacheEntity(System.currentTimeMillis,dictRows)))
+    )
+  } yield UIO.succeed(())
+
+
+
   import zio.blocking._
   val getDict: (List[DbConfig], Dict, Ref[Cache]) => ZIO[ZEnv,Throwable,DictDataRows] = (configuredDbList, trqDict, cache) =>
     for {
@@ -65,28 +82,28 @@ object DbExecutor {
           .mapError(_ => new NoSuchElementException(s"Database name [${trqDict.db}] not found in config."))
       tBeforeOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
       //todo: add Logging in env. and use it here with trace mode.
+
       //connections without pool.
       //thisConnection <- (new PgConnection).sess(thisConfig, trqDict.name)
-
       //connections with pool.
       //thisConnection <- pgPool.sess(thisConfig,trqDict)
       //todo: compare here, effect, effectBlocking or may be lock(ec)
       thisConnection <- effectBlocking(pgPool.sess(thisConfig,trqDict)).refineToOrDie[PSQLException]
-
       tAfterOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
       openConnDuration = tAfterOpenConn - tBeforeOpenConn
       //todo: try pass it direct (new PgConnection).sess(thisConfig)
-      ds: DictDataRows <- getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration)
+      dsCursor = getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration)
 
-      //if try take element from cache, if not exists than execute db query and save into cache.
-      _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1,
-        dictsMap = Map(0 -> CacheEntity(System.currentTimeMillis,ds)))
-      )
+      _ <- updateValueInCache(0,cache,dsCursor)
+
+      ds <- dsCursor
 
       //we absolutely need close it to return to the pool
       _ = thisConnection.sess.close()
       //If this connection was obtained from a pooled data source, then it won't actually be closed, it'll just be returned to the pool.
     } yield ds
+
+
 
 }
 
