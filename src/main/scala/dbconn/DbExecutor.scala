@@ -59,11 +59,13 @@ object DbExecutor {
     )
   }
 
-  private def getValueFromCache(hashKey: Int, cache: Ref[Cache]): Task[Option[CacheEntity]] =
+  private def getValueFromCache(hashKey: Int, cache: Ref[Cache]):  ZIO[ZEnv, Throwable, Option[DictDataRows]]=
     for {
       dsCache <- cache.get
-      ds      = dsCache.dictsMap.get(0)
+      dsCachEntity = dsCache.dictsMap.get(0) // If the key is not defined in the map, an exception is raised.
+      ds = dsCachEntity.map(ce => ce.dictDataRows)
     } yield ds
+
 
   private def updateValueInCache(hashKey: Int, cache: Ref[Cache], ds: Task[DictDataRows]) :Task[Unit] =
     for {
@@ -73,36 +75,43 @@ object DbExecutor {
     )
   } yield UIO.succeed(())
 
-
-
   import zio.blocking._
-  val getDict: (List[DbConfig], Dict, Ref[Cache]) => ZIO[ZEnv,Throwable,DictDataRows] = (configuredDbList, trqDict, cache) =>
-    for {
-      thisConfig <- ZIO.fromOption(configuredDbList.find(dbc => dbc.name == trqDict.db))
+
+  private def getDictFromCursor: (List[DbConfig], Dict, Ref[Cache]) => ZIO[ZEnv, Throwable, DictDataRows] =
+    (configuredDbList, trqDict, cache) =>
+      for {
+        thisConfig <- ZIO.fromOption(configuredDbList.find(dbc => dbc.name == trqDict.db))
           .mapError(_ => new NoSuchElementException(s"Database name [${trqDict.db}] not found in config."))
-      tBeforeOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
-      //todo: add Logging in env. and use it here with trace mode.
+        tBeforeOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
+        //connections without pool.
+        //thisConnection <- (new PgConnection).sess(thisConfig, trqDict.name)
+        //connections with pool.
+        //thisConnection <- pgPool.sess(thisConfig,trqDict)
+        //todo: compare here, effect, effectBlocking or may be lock(ec)
+        thisConnection <- effectBlocking(pgPool.sess(thisConfig, trqDict)).refineToOrDie[PSQLException]
+        tAfterOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
+        openConnDuration = tAfterOpenConn - tBeforeOpenConn
+        //todo: try pass it direct (new PgConnection).sess(thisConfig)
+        dsCursor = getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration)
+        _ <- updateValueInCache(0, cache, dsCursor)
+        ds <- dsCursor
+        //we absolutely need close it to return to the pool
+        _ = thisConnection.sess.close()
+        //If this connection was obtained from a pooled data source, then it won't actually be closed, it'll just be returned to the pool.
+      } yield ds
 
-      //connections without pool.
-      //thisConnection <- (new PgConnection).sess(thisConfig, trqDict.name)
-      //connections with pool.
-      //thisConnection <- pgPool.sess(thisConfig,trqDict)
-      //todo: compare here, effect, effectBlocking or may be lock(ec)
-      thisConnection <- effectBlocking(pgPool.sess(thisConfig,trqDict)).refineToOrDie[PSQLException]
-      tAfterOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
-      openConnDuration = tAfterOpenConn - tBeforeOpenConn
-      //todo: try pass it direct (new PgConnection).sess(thisConfig)
-      dsCursor = getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration)
 
-      _ <- updateValueInCache(0,cache,dsCursor)
-
-      ds <- dsCursor
-
-      //we absolutely need close it to return to the pool
-      _ = thisConnection.sess.close()
-      //If this connection was obtained from a pooled data source, then it won't actually be closed, it'll just be returned to the pool.
-    } yield ds
-
+  val getDict: (List[DbConfig], Dict, Ref[Cache]) => ZIO[ZEnv, Throwable, DictDataRows] =
+    (configuredDbList, trqDict, cache) =>
+      (for {
+        valFromCache <- getValueFromCache(0, cache)
+      } yield valFromCache).foldM(
+         _ => for {
+          db <- getDictFromCursor(configuredDbList, trqDict, cache)
+           _ <- updateValueInCache(0,cache,Task(db))
+         } yield db,
+        v  => Task(v.get)
+  )
 
 
 }
