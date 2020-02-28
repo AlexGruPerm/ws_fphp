@@ -76,7 +76,7 @@ object DbExecutor {
     for {
     dictRows <- ds
     _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1,
-      dictsMap = Map(hashKey -> CacheEntity(System.currentTimeMillis,dictRows)))
+      dictsMap = cv.dictsMap + (hashKey -> CacheEntity(System.currentTimeMillis,dictRows)))
     )
   } yield UIO.succeed(())
 
