@@ -50,7 +50,7 @@ object WsServObj {
       actorSystem =>
         for {
           //cache <- Ref.make(0)
-          cache <- Ref.make(Cache(0,Map(0 -> CacheEntity(ByteString("-")))))
+          cache <- Ref.make(Cache(0,Map(0 -> CacheEntity(DictDataRows("empty",0L,0L,0L,List(List()))))))
           cacheInitialValue <- cache.get
           _  <- zio.logging.locallyAnnotate(correlationId,"wsserver"){
             log(LogLevel.Info)(s"Before startRequestHandler. Cache created with $cacheInitialValue")

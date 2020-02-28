@@ -214,19 +214,24 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
             },
             checkOk =>
               for {
-              str <- ZIO.foreachPar(seqResDicts.dicts){ thisDict =>
-                if (seqResDicts.thread_pool == "block") {
-                  //run in separate blocking pool, "unlimited" thread count
-                  blocking(DbExecutor.getDict(configuredDbList, thisDict, cache))
-                } else {
-                  //run on sync pool, count of threads equal CPU.cores*2 (cycle)
-                  DbExecutor.getDict(configuredDbList, thisDict, cache)
-                }
-              }.fold(
-                err =>  DbErrorDesc("error", err.getMessage, "method[routeDicts]", err.getClass.getName).asJson,
-                succ => RequestResult("ok",DictsDataAccum(succ)).asJson
-              )
-            } yield compress(seqResDicts.cont_encoding_gzip_enabled, Printer.spaces2.print(str))
+                str <- ZIO.foreachPar(seqResDicts.dicts) {
+                  thisDict =>
+                    if (seqResDicts.thread_pool == "block") {
+                      //run in separate blocking pool, "unlimited" thread count
+                      blocking(DbExecutor.getDict(configuredDbList, thisDict, cache))
+                    } else {
+                      //run on sync pool, count of threads equal CPU.cores*2 (cycle)
+                      DbExecutor.getDict(configuredDbList, thisDict, cache)
+                    }
+                }.fold(
+                  err => compress(seqResDicts.cont_encoding_gzip_enabled,
+                    Printer.spaces2.print(DbErrorDesc("error", err.getMessage, "method[routeDicts]", err.getClass.getName).asJson)
+                  ),
+                  succ => compress(seqResDicts.cont_encoding_gzip_enabled,
+                    Printer.spaces2.print(RequestResult("ok", DictsDataAccum(succ)).asJson)
+                  )
+                )
+              } yield str
           )
 
         // Common logic

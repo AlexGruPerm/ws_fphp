@@ -42,10 +42,10 @@ case class RequestResult(status: String,
 //todo: maybe add prefix in response, is it from cache or not!?
 
 
-case class CacheEntity(ts: Long, dictStr: ByteString)
+case class CacheEntity(ts: Long, dictDataRows: DictDataRows)
 
 object CacheEntity {
-   def apply(data: ByteString): CacheEntity =
+   def apply(data: DictDataRows): CacheEntity =
     new CacheEntity(System.currentTimeMillis, data)
 }
 

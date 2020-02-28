@@ -80,7 +80,7 @@ object DbExecutor {
 
       //if try take element from cache, if not exists than execute db query and save into cache.
       _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1,
-        dictsMap = Map(0 -> CacheEntity(System.currentTimeMillis,ByteString(Printer.spaces2.print(ds.asJson)))))
+        dictsMap = Map(0 -> CacheEntity(System.currentTimeMillis,ds)))
       )
 
       //we absolutely need close it to return to the pool

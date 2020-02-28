@@ -749,7 +749,12 @@ object CollectJsons {
       |                 "request_timeout_ms": 5000,
       |                "dicts": [
       |                {
-      |                 "name"  : "litener_notify",
+      |                 "name"  : "litener_notify_1",
+      |                  "db"   : "db1",
+      |                  "proc" : "prm_salary.pkg_web_litener_notify(refcur => ?, p_user_id => 45224506)"
+      |                },
+      |                {
+      |                 "name"  : "litener_notify_2",
       |                  "db"   : "db1",
       |                  "proc" : "prm_salary.pkg_web_litener_notify(refcur => ?, p_user_id => 45224506)"
       |                }
