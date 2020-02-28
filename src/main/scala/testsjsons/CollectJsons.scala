@@ -626,7 +626,9 @@ object CollectJsons {
 
 
 
-   val reqJsonText_old =
+
+
+   val reqJsonText_ =
     """
       |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
       |                "cont_encoding_gzip_enabled" : 1,
@@ -741,7 +743,7 @@ object CollectJsons {
       |""".stripMargin
 
 
-  val reqJsonText_ =
+  val reqJsonText_# =
     """
       |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
       |                "cont_encoding_gzip_enabled" : 0,

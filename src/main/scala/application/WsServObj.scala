@@ -27,7 +27,8 @@ object WsServObj {
     for {
        cacheCurrentValue <- cache.get
       _  <- zio.logging.locallyAnnotate(correlationId,"cache_checker"){
-        log(LogLevel.Debug)(s"cacheCurrentValue = $cacheCurrentValue")
+        log(LogLevel.Debug)(s"cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
+          s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
         /*
         IO.foreach(cacheCurrentValue.){ce =>
           log(LogLevel.Debug)(s"cacheCurrentValue = $cacheCurrentValue")

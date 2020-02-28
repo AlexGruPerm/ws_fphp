@@ -61,7 +61,7 @@ object DbExecutor {
 
   private def getValueFromCache(hashKey: Int, cache: Ref[Cache]) = // :ZIO[ZEnv,NoSuchElementException,DictDataRows] =
     cache.get.flatMap(dsCache =>
-      IO.effect(dsCache.dictsMap.get(0).map(ce => ce.dictDataRows).get))
+      IO.effect(dsCache.dictsMap.get(hashKey).map(ce => ce.dictDataRows).get))
       .refineToOrDie[NoSuchElementException]
 
   /*(for {
@@ -76,7 +76,7 @@ object DbExecutor {
     for {
     dictRows <- ds
     _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1,
-      dictsMap = Map(0 -> CacheEntity(System.currentTimeMillis,dictRows)))
+      dictsMap = Map(hashKey -> CacheEntity(System.currentTimeMillis,dictRows)))
     )
   } yield UIO.succeed(())
 
@@ -98,7 +98,8 @@ object DbExecutor {
         openConnDuration = tAfterOpenConn - tBeforeOpenConn
         //todo: try pass it direct (new PgConnection).sess(thisConfig)
         dsCursor = getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration)
-        _ <- updateValueInCache(0, cache, dsCursor)
+        hashKey :Int = trqDict.hashCode() //todo: add user_session
+        _ <- updateValueInCache(hashKey, cache, dsCursor)
         ds <- dsCursor
         //we absolutely need close it to return to the pool
         _ = thisConnection.sess.close()
@@ -109,13 +110,13 @@ object DbExecutor {
   val getDict: (List[DbConfig], Dict, Ref[Cache]) => ZIO[ZEnv, Throwable, DictDataRows] =
     (configuredDbList, trqDict, cache) =>
       (for {
-        valFromCache <- getValueFromCache(0, cache)
+        valFromCache <- getValueFromCache(trqDict.hashCode(), cache)
         _ <- putStrLn(s">>>>>> value found in cache ${valFromCache.name}")
       } yield valFromCache).foldM(
          _ => for {
           db <- getDictFromCursor(configuredDbList, trqDict, cache)
           _ <- putStrLn(s"<<<<<< value get from db ${db.name}")
-           _ <- updateValueInCache(0,cache,Task(db))
+           _ <- updateValueInCache(trqDict.hashCode(),cache,Task(db))
          } yield db,
         v  => Task(v)
   )
