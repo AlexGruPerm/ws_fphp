@@ -19,7 +19,7 @@ import reqdata.Dict
 import zio.clock.Clock
 import zio.console.putStrLn
 import zio.logging.{LogLevel, Logging, log}
-import zio.{DefaultRuntime, IO, Ref, Task, UIO, ZEnv, ZIO, clock}
+import zio.{DefaultRuntime, IO, RIO, Ref, Task, UIO, ZEnv, ZIO, clock}
 
 
 //  loggetDict <- ZIO.access[Logging](_.logger)
@@ -59,12 +59,17 @@ object DbExecutor {
     )
   }
 
-  private def getValueFromCache(hashKey: Int, cache: Ref[Cache]):  ZIO[ZEnv, Throwable, Option[DictDataRows]]=
-    for {
-      dsCache <- cache.get
-      dsCachEntity = dsCache.dictsMap.get(0) // If the key is not defined in the map, an exception is raised.
-      ds = dsCachEntity.map(ce => ce.dictDataRows)
-    } yield ds
+  private def getValueFromCache(hashKey: Int, cache: Ref[Cache]) = // :ZIO[ZEnv,NoSuchElementException,DictDataRows] =
+    cache.get.flatMap(dsCache =>
+      IO.effect(dsCache.dictsMap.get(0).map(ce => ce.dictDataRows).get))
+      .refineToOrDie[NoSuchElementException]
+
+  /*(for {
+    dsCache <- cache.get
+    dsCachEntity = dsCache.dictsMap.get(0) // If the key is not defined in the map, an exception is raised.
+    ds = dsCachEntity.map(ce => ce.dictDataRows)
+  } yield ds.get).refineToOrDie[NoSuchElementException]
+*/
 
 
   private def updateValueInCache(hashKey: Int, cache: Ref[Cache], ds: Task[DictDataRows]) :Task[Unit] =
@@ -105,12 +110,14 @@ object DbExecutor {
     (configuredDbList, trqDict, cache) =>
       (for {
         valFromCache <- getValueFromCache(0, cache)
+        _ <- putStrLn(s">>>>>> value found in cache ${valFromCache.name}")
       } yield valFromCache).foldM(
          _ => for {
           db <- getDictFromCursor(configuredDbList, trqDict, cache)
+          _ <- putStrLn(s"<<<<<< value get from db ${db.name}")
            _ <- updateValueInCache(0,cache,Task(db))
          } yield db,
-        v  => Task(v.get)
+        v  => Task(v)
   )
 
 

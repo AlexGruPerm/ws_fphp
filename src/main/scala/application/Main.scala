@@ -41,7 +41,8 @@ object Main extends zio.App {
          log(LogLevel.Info)("Web service starting")
         }.provideSomeM(env)
       _ <- checkArgs(args)
-      cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
+      //cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
+      cfg <- Configuration.config.load("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/application.conf")
       res <- WsServObj.WsServer(cfg)
       _ <- log("Web service stopping").provideSomeM(env)
     } yield res
