@@ -36,7 +36,6 @@ case class DictDataRows(name: String,
 @JsonCodec
 case class DictsDataAccum(dicts: List[DictDataRows])
 
-
 @JsonCodec
 case class RequestResult(status: String,
                          data: DictsDataAccum)
