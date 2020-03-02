@@ -225,7 +225,8 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
                     }
                 }.fold(
                   err => compress(seqResDicts.cont_encoding_gzip_enabled,
-                    Printer.spaces2.print(DbErrorDesc("error", err.getMessage, "method[routeDicts]", err.getClass.getName).asJson)
+                    Printer.spaces2.print(DbErrorDesc("error", err.getMessage, "method[routeDicts]",
+                      err.getClass.getName).asJson)
                   ),
                   succ => compress(seqResDicts.cont_encoding_gzip_enabled,
                     Printer.spaces2.print(RequestResult("ok", DictsDataAccum(succ)).asJson)
@@ -267,9 +268,9 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
   //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
   val routeGetDebug: (HttpRequest) => ZIO[ZEnv, Throwable, HttpResponse] = request => for {
     strDebugForm <- openFile(
-     // "C:\\ws_fphp\\src\\main\\resources\\debug_post.html"
+      "C:\\ws_fphp\\src\\main\\resources\\debug_post.html"
       //"C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\debug_post.html"
-    "/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
+    //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
     ).bracket(closeFile) { file =>
       Task(file.getLines.mkString.replace("req_json_text", CollectJsons.reqJsonText_))
     }
