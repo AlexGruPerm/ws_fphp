@@ -628,7 +628,7 @@ object CollectJsons {
 
 
 
-   val reqJsonText_ =
+   val reqJsonText_!!! =
     """
       |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
       |                "cont_encoding_gzip_enabled" : 1,
@@ -744,7 +744,7 @@ object CollectJsons {
       |""".stripMargin
 
 
-  val reqJsonText_# =
+  val reqJsonText_ =
     """
       |              { "user_session" : "9d6iQk5LmtfpoYd78mmuHsajjaI2rbRh",
       |                "cont_encoding_gzip_enabled" : 0,
@@ -753,12 +753,12 @@ object CollectJsons {
       |                "dicts": [
       |                {
       |                 "name"  : "litener_notify_1",
-      |                  "db"   : "db1",
+      |                  "db"   : "dbp",
       |                  "proc" : "prm_salary.pkg_web_litener_notify(refcur => ?, p_user_id => 45224506)"
       |                },
       |                {
       |                 "name"  : "litener_notify_2",
-      |                  "db"   : "db1",
+      |                  "db"   : "dbp",
       |                  "proc" : "prm_salary.pkg_web_litener_notify(refcur => ?, p_user_id => 45224506)"
       |                }
       |              ]
