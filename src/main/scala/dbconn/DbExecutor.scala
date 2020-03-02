@@ -120,7 +120,7 @@ object DbExecutor {
     (configuredDb, trqDict, cache) =>
       (for {
         valFromCache <- getValueFromCache(trqDict.hashCode(), cache)
-        _ <- putStrLn(s">>>>>> value found in cache ${valFromCache.name}")
+        _ <- putStrLn(s">>>>>> value found in cache ${valFromCache.name} for hashKey=${trqDict.hashCode()}")
       } yield valFromCache).foldM(
          _ => for {
           db <- getDictFromCursor(configuredDb, trqDict, cache)

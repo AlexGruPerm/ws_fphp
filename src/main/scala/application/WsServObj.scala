@@ -10,33 +10,113 @@ import akka.util.{ByteString, Timeout}
 import application.WsServObj.CommonTypes.IncConnSrvBind
 import confs.{Config, DbConfig}
 import data.{Cache, CacheEntity, DictDataRows}
+import dbconn.{PgConnection, pgSess, pgSessListen}
 import logging.LoggerCommon._
+import org.postgresql.PGNotification
 import zio.logging.{LogLevel, log}
 import zio._
+import zio.console.putStrLn
 
+import scala.Option
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.language.postfixOps
 
 //ex of using Ref for cache. https://stackoverflow.com/questions/57252919/scala-zio-ref-datatype
 object WsServObj {
 
+  private val notifTimeout: Int = 3000
+
   /**
    *
    */
-  private val cacheChecker: Ref[Cache] => ZIO[ZEnv, Nothing, Unit] = cache =>
+  private val cacheChecker: (Ref[Cache]) => ZIO[ZEnv, Nothing, Unit] = (cache) =>
     for {
-       cacheCurrentValue <- cache.get
+      cacheCurrentValue <- cache.get
       _  <- zio.logging.locallyAnnotate(correlationId,"cache_checker"){
         log(LogLevel.Debug)(s"cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
           s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
-        /*
-        IO.foreach(cacheCurrentValue.){ce =>
-          log(LogLevel.Debug)(s"cacheCurrentValue = $cacheCurrentValue")
-        }
-        */
       }.provideSomeM(env)
       _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1))//todo: remove.
     } yield ()
+
+  /**
+
+  CREATE OR REPLACE FUNCTION notify_change() RETURNS TRIGGER AS $$
+    BEGIN
+        perform pg_notify('change', TG_TABLE_NAME);
+        RETURN NULL;
+    END;
+$$ LANGUAGE plpgsql;
+
+drop TRIGGER trg_ch_listener_notify on listener_notify;
+
+create TRIGGER trg_ch_listener_notify
+AFTER INSERT OR UPDATE OR DELETE ON listener_notify
+FOR EACH statement EXECUTE PROCEDURE notify_change();
+
+   */
+  private val cacheValidator: (Ref[Cache],pgSessListen) => ZIO[ZEnv, Nothing, Unit] = (cache,pgsessLs) =>
+    for {
+      cacheCurrentValue <- cache.get
+
+      _  <- zio.logging.locallyAnnotate(correlationId,"cache_validator"){
+        log(LogLevel.Debug)(s"DB Listener PID = ${pgsessLs.pid}")
+      }.provideSomeM(env)
+
+      //getNotifications(notifTimeout)
+      notifications = scala.Option(pgsessLs.sess.getNotifications).getOrElse(Array[PGNotification]())
+
+      _ = if (notifications.size!=0) {
+        zio.logging.locallyAnnotate(correlationId,"cache_validator"){
+          log(LogLevel.Trace)(s"notifications size = ${notifications.size}")
+      }}
+
+      _  <- zio.logging.locallyAnnotate(correlationId,"cache_validator"){
+          ZIO.foreach(notifications) { nt =>
+            log(LogLevel.Trace)(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
+
+            if (nt.getName=="change" && nt.getParameter=="listener_notify") {
+              for {
+                _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1, dictsMap = cv.dictsMap - (1167691450,-1217117277)))
+              } yield UIO.succeed(())
+            } else {UIO.succeed(())}
+
+          }
+      }.provideSomeM(env).catchAllCause{
+        e => putStrLn(s" cacheValidator Exception $e")
+      }
+
+      /*
+      _  <- zio.logging.locallyAnnotate(correlationId,"cache_validator"){
+        log(LogLevel.Trace)(s"notifications size = ${notifications.size}") *>
+        ZIO.foreach(notifications) { nt =>
+          log(LogLevel.Trace)(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
+        }
+      }.provideSomeM(env).catchAllCause(e => putStrLn(s" cacheValidator Exception $e"))
+      */
+      //todo: may be clear whole cache.
+
+      /*
+   _ <- ZIO.foreach(notifications) { nt =>
+      putStrLn(s"Notification name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
+    }
+      */
+
+  } yield ()
+
+    /*
+        ZIO.foreach(pgsessLs.sess.getNotifications(3000))(nt =>
+          log(LogLevel.Debug)(s"Notification name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}").provideSomeM(env)
+        )
+*/
+      /*
+      cacheCurrentValue <- cache.get
+      _  <- zio.logging.locallyAnnotate(correlationId,"cache_validator"){
+        log(LogLevel.Debug)(s"cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
+          s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
+      }.provideSomeM(env)
+      _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1))//todo: remove.
+      */
 
 
   /**
@@ -50,18 +130,22 @@ object WsServObj {
     val wsRes = Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
         for {
-          //cache <- Ref.make(0)
-          cache <- Ref.make(Cache(0,Map(1 -> CacheEntity(DictDataRows("empty",0L,0L,0L,List(List()))))))
+          cache <- Ref.make(Cache(0, Map(1 -> CacheEntity(DictDataRows("empty", 0L, 0L, 0L, List(List()))))))
           cacheInitialValue <- cache.get
-          _  <- zio.logging.locallyAnnotate(correlationId,"wsserver"){
+          _ <- zio.logging.locallyAnnotate(correlationId, "wsserver") {
             log(LogLevel.Info)(s"Before startRequestHandler. Cache created with $cacheInitialValue")
           }.provideSomeM(env)
 
           fiber <- startRequestHandler(cache, conf, actorSystem).fork
           _ <- fiber.join
-          _ <- cacheChecker(cache).repeat(Schedule.spaced(5.second))
 
-          _  <- zio.logging.locallyAnnotate(correlationId,"wsserver"){
+          thisConnection <- (new PgConnection).sess(conf.dbListenConfig)
+
+          cacheCheckerValidaot <- cacheValidator(cache,thisConnection).repeat(Schedule.spaced(1.second)).fork *>
+           cacheChecker(cache).repeat(Schedule.spaced(2.second)).fork
+          _ <- cacheCheckerValidaot.join
+
+          _ <- zio.logging.locallyAnnotate(correlationId, "wsserver") {
             log(LogLevel.Info)("After startRequestHandler, end of WsServer.")
           }.provideSomeM(env)
 
