@@ -59,17 +59,11 @@ object DbExecutor {
     )
   }
 
+
   private def getValueFromCache(hashKey: Int, cache: Ref[Cache]) = // :ZIO[ZEnv,NoSuchElementException,DictDataRows] =
     cache.get.flatMap(dsCache =>
       IO.effect(dsCache.dictsMap.get(hashKey).map(ce => ce.dictDataRows).get))
       .refineToOrDie[NoSuchElementException]
-
-  /*(for {
-    dsCache <- cache.get
-    dsCachEntity = dsCache.dictsMap.get(0) // If the key is not defined in the map, an exception is raised.
-    ds = dsCachEntity.map(ce => ce.dictDataRows)
-  } yield ds.get).refineToOrDie[NoSuchElementException]
-*/
 
 
   private def updateValueInCache(hashKey: Int, cache: Ref[Cache], ds: Task[DictDataRows]) :Task[Unit] =

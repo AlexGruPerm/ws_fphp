@@ -55,59 +55,39 @@ AFTER INSERT OR UPDATE OR DELETE ON listener_notify
 FOR EACH statement EXECUTE PROCEDURE notify_change();
 
    */
-  private val cacheValidator: (Ref[Cache],pgSessListen) => ZIO[ZEnv, Nothing, Unit] = (cache, pgsessLs) =>
+  private val cacheValidator: (Ref[Cache], pgSessListen) => Task[Unit] = (cache, pgsessLs) =>
     for {
-      //cacheCurrentValue <- cache.get
+      _ <- zio.logging.locallyAnnotate(correlationId, "cache_validator") {
+        for {
+          _ <- log(LogLevel.Debug)(s"DB Listener PID = ${pgsessLs.pid}")
+          notifications = scala.Option(pgsessLs.sess.getNotifications).getOrElse(Array[PGNotification]()) //timeout
 
-      _  <- zio.logging.locallyAnnotate(correlationId,"cache_validator"){
-        log(LogLevel.Debug)(s"DB Listener PID = ${pgsessLs.pid}")
-      }.provideSomeM(env)
+          _ <- (if (notifications.size != 0) {
+            log(LogLevel.Debug)(s"notifications size = ${notifications.size}")
+          } else {
+            log(LogLevel.Debug)(s"notifications size = 0")
+          })
 
-      //getNotifications(notifTimeout)
-      notifications = scala.Option(pgsessLs.sess.getNotifications).getOrElse(Array[PGNotification]())
-
-      _ = if (notifications.size!=0) {
-        zio.logging.locallyAnnotate(correlationId,"cache_validator"){
-          log(LogLevel.Debug)(s"notifications size = ${notifications.size}")
-      }//.provideSomeM(env)
-      } else {
-        zio.logging.locallyAnnotate(correlationId,"cache_validator"){
-          log(LogLevel.Debug)(s"notifications size = 0")
-        }//.provideSomeM(env)
-      }
-
-      _  <- zio.logging.locallyAnnotate(correlationId,"cache_validator"){
-          ZIO.foreach(notifications) { nt =>
-            log(LogLevel.Debug)(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
-
-            if (nt.getName=="change" && nt.getParameter=="listener_notify") {
-              for {
-                _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1, dictsMap = cv.dictsMap - (1670615853,-1839933013)))
-              } yield UIO.succeed(())
-            } else {UIO.succeed(())}
-
+          _ <- (
+            ZIO.foreach(notifications) { nt =>
+              if (nt.getName == "change" && nt.getParameter == "listener_notify") {
+                for {
+                  _ <- log(LogLevel.Debug)(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
+                  _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1, dictsMap = cv.dictsMap - (1670615853, -1839933013)))
+                } yield UIO.succeed(())
+              } else {
+                UIO.succeed(())
+              }
+            }
+            ).catchAllCause {
+            e => log(LogLevel.Debug)(s" cacheValidator Exception $e")
           }
-      }.provideSomeM(env).catchAllCause{
-        e => putStrLn(s" cacheValidator Exception $e")
-      }
 
-      /*
-      _  <- zio.logging.locallyAnnotate(correlationId,"cache_validator"){
-        log(LogLevel.Trace)(s"notifications size = ${notifications.size}") *>
-        ZIO.foreach(notifications) { nt =>
-          log(LogLevel.Trace)(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
-        }
-      }.provideSomeM(env).catchAllCause(e => putStrLn(s" cacheValidator Exception $e"))
-      */
-      //todo: may be clear whole cache.
+        } yield ()
+      }.provideSomeM(env)
+    } yield ()
 
-      /*
-   _ <- ZIO.foreach(notifications) { nt =>
-      putStrLn(s"Notification name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
-    }
-      */
 
-  } yield ()
 
     /*
         ZIO.foreach(pgsessLs.sess.getNotifications(3000))(nt =>
@@ -146,8 +126,8 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
 
           thisConnection <- (new PgConnection).sess(conf.dbListenConfig)
 
-          cacheCheckerValidaot <- cacheValidator(cache,thisConnection).repeat(Schedule.spaced(1.second)).fork *>
-           cacheChecker(cache).repeat(Schedule.spaced(3.second)).fork
+          cacheCheckerValidaot <- cacheValidator(cache,thisConnection).repeat(Schedule.spaced(3.second)).fork *>
+           cacheChecker(cache).repeat(Schedule.spaced(4.second)).fork
           _ <- cacheCheckerValidaot.join
 
           _ <- zio.logging.locallyAnnotate(correlationId, "wsserver") {

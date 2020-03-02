@@ -65,7 +65,6 @@ object ReqResp {
     }.provideSomeM(env)
   } yield ()
 
-
   val logReqData : Task[RequestData] => Task[Unit] = reqData => for {
     rd <- reqData
     _  <- zio.logging.locallyAnnotate(correlationId,"log_reqdata"){
@@ -79,47 +78,6 @@ object ReqResp {
       } yield ()
     }.provideSomeM(env)
   } yield ()
-
-
-/*
-    private lazy val jdbcRuntime: DbConfig => zio.Runtime[JdbcIO] = dbconf => {
-      val props = new Properties()
-      props.setProperty("user", dbconf.username)
-      props.setProperty("password", dbconf.password)
-      zio.Runtime(new JdbcIO {
-          Class.forName(dbconf.driver)
-          //todo: maybe Properties instead of u,p
-          val connection: Connection = java.sql.DriverManager.getConnection(dbconf.url + dbconf.dbname, props)
-          connection.setClientInfo("ApplicationName", s"wsfphp")
-          connection.setAutoCommit(false)
-      }, zio.internal.PlatformLive.Default
-      )
-  }
-
-
-  val getCursorData: Dict => ZIO[JdbcIO, Throwable, DictDataRows] = dict =>
-    JdbcIO.effect { conn =>
-      val stmt = conn.prepareCall(s"{call ${dict.proc} }")
-      stmt.setNull(1, Types.OTHER)
-      stmt.registerOutParameter(1, Types.OTHER)
-      stmt.execute()
-      // org.postgresql.jdbc.PgResultSet
-      //val refCur = stmt.getObject(1)
-      val pgrs : PgResultSet = stmt.getObject(1).asInstanceOf[PgResultSet]
-      val columns: List[(String,String)] = (1 to pgrs.getMetaData.getColumnCount)
-        .map(cnum => (pgrs.getMetaData.getColumnName(cnum),pgrs.getMetaData.getColumnTypeName(cnum))).toList
-      // here we itarate over all rows (PgResultSet) and for each row iterate over our columns,
-      // and extract cells data with getString.
-      //List[List[DictRow]]
-      DictDataRows(
-        dict.name,
-        0L,
-        Iterator.continually(pgrs).takeWhile(_.next()).map { rs =>
-          columns.map(cname => DictRow(cname._1, rs.getString(cname._1)))
-        }.toList
-      )
-    }
-  */
 
   /**
    * This is one of client handler.
@@ -147,26 +105,17 @@ object ReqResp {
     parse(strRequest) match {
       case Left (failure) => Task.fail (
         ReqParseException("Error code[001] Invalid json in request", failure.getCause)
-        //new Exception (s"Invalid json in request, [code 001]. $failure")
       )
       case Right (json) => json.as[RequestData].swap
       match {
         case   Left(sq) => Task.succeed(sq)
         case   Right(failure) =>  Task.fail (
           ReqParseException("Error code[002] Invalid json in request", failure.getCause)
-          //new Exception (s"Invalid json in request, [code 002]. $failure")
         )
       }
       }
     }
 
-  /*
-cvb <- cache.get
-_ <- putStrLn(s"BEFORE(test): cg=$cvb")
-_ <- cache.update(_ + 100)
-cva <- cache.get
-_ <- putStrLn(s"AFTER(test): cg=$cva")
-*/
 
   /**
    * Function to check in one place that all dicts.db exist among configured db list (application.conf)
@@ -275,21 +224,13 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
   //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
   val routeGetDebug: (HttpRequest) => ZIO[ZEnv, Throwable, HttpResponse] = request => for {
     strDebugForm <- openFile(
-      "C:\\ws_fphp\\src\\main\\resources\\debug_post.html"
+    //  "C:\\ws_fphp\\src\\main\\resources\\debug_post.html"
       //"C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\debug_post.html"
-    //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
+    "/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
     ).bracket(closeFile) { file =>
       Task(file.getLines.mkString.replace("req_json_text", CollectJsons.reqJsonText_))
     }
     _ <- logRequest(request)
-
-    /*
-    cvb <- cache.get
-    _ <- putStrLn(s"BEFORE(debug): cg=$cvb")
-    _ <- cache.update(_ + 3)
-    cva <- cache.get
-    _ <- putStrLn(s"AFTER(debug): cg=$cva")
-    */
 
     f <- ZIO.fromFuture { implicit ec =>
       Future.successful(HttpResponse(StatusCodes.OK, entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)))
