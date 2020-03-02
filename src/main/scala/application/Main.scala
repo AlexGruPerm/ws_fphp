@@ -44,8 +44,11 @@ object Main extends zio.App {
       //cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
       cfg <- Configuration.config.load("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/application.conf")
       res <- WsServObj.WsServer(cfg)
-      _ <- log("Web service stopping").provideSomeM(env)
+      _ <- log("Web service stopping").provideSomeM(env) //todo: remove it with external coverage of
     } yield res
+
+
+
 
 }
 

@@ -10,14 +10,16 @@ import io.circe.generic.JsonCodec
  * }
  *
 */
+/*
 @JsonCodec
 case class RefTable(tablename: String)
+*/
 
 @JsonCodec
 case class Dict(name: String,
                 db:String,
                 proc: String,
-                reftables: Option[List[RefTable]]
+                reftables: Option[Seq[String]]
                )
 
 /**

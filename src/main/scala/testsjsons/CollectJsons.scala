@@ -755,17 +755,22 @@ object CollectJsons {
       |                 "name"  : "litener_notify_1",
       |                  "db"   : "dbp",
       |                  "proc" : "prm_salary.pkg_web_litener_notify(refcur => ?, p_user_id => 45224506)",
-      |                  "ref_tables" : [
-      |                    "listener_notify","any_table_name"
+      |                  "reftables" : [
+      |                    "table1","table2"
       |                  ]
       |                },
       |                {
       |                 "name"  : "litener_notify_2",
       |                  "db"   : "dbp",
       |                  "proc" : "prm_salary.pkg_web_litener_notify(refcur => ?, p_user_id => 45224506)",
-      |                  "ref_tables" : [
+      |                  "reftables" : [
       |                    "listener_notify","any_table_name"
       |                  ]
+      |                },
+      |                {
+      |                 "name"  : "litener_notify_3",
+      |                  "db"   : "dbp",
+      |                  "proc" : "prm_salary.pkg_web_litener_notify(refcur => ?, p_user_id => 45224506)"
       |                }
       |              ]
       |             }

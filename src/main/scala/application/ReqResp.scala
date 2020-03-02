@@ -72,10 +72,19 @@ object ReqResp {
         _ <- log(LogLevel.Trace)("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         _ <- log(LogLevel.Trace)(s"session_id = ${rd.user_session}")
         _ <- log(LogLevel.Trace)(s"encoding_gzip = ${rd.cont_encoding_gzip_enabled}")
-        _ <- URIO.foreach(rd.dicts)(d => log(LogLevel.Trace)
-             (s"dict = ${d.db} - ${d.proc} "))
+        _ <- log(LogLevel.Trace)(s"dicts size = ${rd.dicts.size}")
+        _ <- URIO.foreach(rd.dicts){ d =>
+          log(LogLevel.Trace)(s"dict = ${d.db} - ${d.proc} ")
+          for {
+              _ <- log(LogLevel.Trace)(s" ref tables in dict : ${d.reftables.getOrElse(Seq()).size} ")
+            _ <- URIO.foreach(d.reftables.getOrElse(Seq())){tableName =>
+              log(LogLevel.Trace)(s"reftable = $tableName ")
+            }
+          } yield URIO.unit
+        }
+
         _ <- log(LogLevel.Trace)("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-      } yield ()
+        }yield ()
     }.provideSomeM(env)
   } yield ()
 
