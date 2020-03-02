@@ -55,9 +55,9 @@ AFTER INSERT OR UPDATE OR DELETE ON listener_notify
 FOR EACH statement EXECUTE PROCEDURE notify_change();
 
    */
-  private val cacheValidator: (Ref[Cache],pgSessListen) => ZIO[ZEnv, Nothing, Unit] = (cache,pgsessLs) =>
+  private val cacheValidator: (Ref[Cache],pgSessListen) => ZIO[ZEnv, Nothing, Unit] = (cache, pgsessLs) =>
     for {
-      cacheCurrentValue <- cache.get
+      //cacheCurrentValue <- cache.get
 
       _  <- zio.logging.locallyAnnotate(correlationId,"cache_validator"){
         log(LogLevel.Debug)(s"DB Listener PID = ${pgsessLs.pid}")
@@ -68,16 +68,21 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
 
       _ = if (notifications.size!=0) {
         zio.logging.locallyAnnotate(correlationId,"cache_validator"){
-          log(LogLevel.Trace)(s"notifications size = ${notifications.size}")
-      }}
+          log(LogLevel.Debug)(s"notifications size = ${notifications.size}")
+      }//.provideSomeM(env)
+      } else {
+        zio.logging.locallyAnnotate(correlationId,"cache_validator"){
+          log(LogLevel.Debug)(s"notifications size = 0")
+        }//.provideSomeM(env)
+      }
 
       _  <- zio.logging.locallyAnnotate(correlationId,"cache_validator"){
           ZIO.foreach(notifications) { nt =>
-            log(LogLevel.Trace)(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
+            log(LogLevel.Debug)(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
 
             if (nt.getName=="change" && nt.getParameter=="listener_notify") {
               for {
-                _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1, dictsMap = cv.dictsMap - (1167691450,-1217117277)))
+                _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1, dictsMap = cv.dictsMap - (1670615853,-1839933013)))
               } yield UIO.succeed(())
             } else {UIO.succeed(())}
 
@@ -142,7 +147,7 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
           thisConnection <- (new PgConnection).sess(conf.dbListenConfig)
 
           cacheCheckerValidaot <- cacheValidator(cache,thisConnection).repeat(Schedule.spaced(1.second)).fork *>
-           cacheChecker(cache).repeat(Schedule.spaced(2.second)).fork
+           cacheChecker(cache).repeat(Schedule.spaced(3.second)).fork
           _ <- cacheCheckerValidaot.join
 
           _ <- zio.logging.locallyAnnotate(correlationId, "wsserver") {
