@@ -171,19 +171,26 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
   /**
    * Function to check in one place that all dicts.db exist among configured db list (application.conf)
   */
-  val dictDbsCheckInConfig: (Task[RequestData], List[DbConfig]) => ZIO[Logging, Throwable, Unit] =
-    (requestData, configuredDbList) =>
+  val dictDbsCheckInConfig: (Task[RequestData], DbConfig) => ZIO[Logging, Throwable, Unit] =
+    (requestData, configuredDB) =>
       for {
         logChecker <- ZIO.access[Logging](_.logger)
         reqData <- requestData
         reqListDb: Seq[String] = reqData.dicts.map(_.db).distinct
-        accumRes <-
+        accumRes <- ZIO.foreachPar(reqListDb){thisDb =>
+          if (configuredDB.name == thisDb) {
+            ZIO.none
+        } else {
+            ZIO.some(s"DB [$thisDb] from request not found in config file application.conf")
+          }}
+        /*
           ZIO.foreachPar(reqListDb) { thisDb =>
-            configuredDbList.find(_.name == thisDb) match {
+            (configuredDbList.name == thisDb) match {
               case Some(_) => ZIO.none
               case None => ZIO.some(s"DB [$thisDb] from request not found in config file application.conf")
             }
           }
+        */
         _ <- logChecker.log(LogLevel.Error)("error message here")
         _ <- logChecker.locallyAnnotate(correlationId, "db_conf_checker") {
           ZIO.foreach(accumRes.flatten)(thisErrLine => log(LogLevel.Error)(thisErrLine))
@@ -197,7 +204,7 @@ _ <- putStrLn(s"AFTER(test): cg=$cva")
       } yield checkResult //UIO.succeed(())
 
   import zio.blocking._
-  val routeDicts: (HttpRequest, Ref[Cache], List[DbConfig], Future[String]) => ZIO[ZEnv, Throwable, HttpResponse] =
+  val routeDicts: (HttpRequest, Ref[Cache], DbConfig, Future[String]) => ZIO[ZEnv, Throwable, HttpResponse] =
     (request, cache, configuredDbList, reqEntity) =>
       for {
         _ <- logRequest(request)

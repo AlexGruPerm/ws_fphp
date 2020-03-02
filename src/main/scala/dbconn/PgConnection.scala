@@ -41,19 +41,16 @@ import zio.Task
 class PgConnection  {
 
   //todo: read PgConnectProp properties single time from input json.
-  val sess : (DbConfig,String) => Task[pgSess] = (dbconf,dictName) =>
+  val sess : DbConfig => Task[pgSess] = (dbconf) =>
     Task {
       val c :Connection = DriverManager.getConnection(dbconf.urlWithDb, dbconf.getJdbcProperties)
-      c.setClientInfo("ApplicationName",s"wsfphp_$dictName")
+      c.setClientInfo("ApplicationName",s"wsfphp_notif_listener")
       c.setAutoCommit(false)
-      /*
       val stmt: Statement = c.createStatement
       val rs: ResultSet = stmt.executeQuery("SELECT pg_backend_pid() as pg_backend_pid")
       rs.next()
       val pg_backend_pid :Int = rs.getInt("pg_backend_pid")
-      logger.info(s"User sesison pg_backend_pid = $pg_backend_pid")
-      */
-      pgSess(c,0/*pg_backend_pid*/)
+      pgSess(c,pg_backend_pid)
     }.refineToOrDie[PSQLException]
 
 }

@@ -9,7 +9,7 @@ import pureconfig.ConfigSource
 import pureconfig.error.ConfigReaderFailures
 import pureconfig.generic.auto._
 
-final case class Config(api: ApiConfig, dbConfig: List[DbConfig])
+final case class Config(api: ApiConfig, dbConfig: DbConfig)
 
 final case class ApiConfig(endpoint: String, port: Int)
 

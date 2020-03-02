@@ -85,7 +85,7 @@ object WsServObj {
     (conf, actorSystem) => for {
       _  <- zio.logging.locallyAnnotate(correlationId,"server_source"){
         log(LogLevel.Info)(s"Create Source[IncConnSrvBind] with ${conf.api.endpoint}:${conf.api.port}") &&&
-          log(LogLevel.Info)(s" In input config are configured ${conf.dbConfig.size} databases.")
+          log(LogLevel.Info)(s" In input config are configured dbname = ${conf.dbConfig.dbname} databases.")
       }.provideSomeM(env)
       ss <- Task(Http(actorSystem).bind(interface = conf.api.endpoint, port = conf.api.port))
     } yield ss
@@ -93,7 +93,7 @@ object WsServObj {
   /**
    * dbConfigList are registered list of databases from config file - application.conf
   */
-  def reqHandlerM(dbConfigList: List[DbConfig], actorSystem: ActorSystem, cache: Ref[Cache])(request: HttpRequest):
+  def reqHandlerM(dbConfigList: DbConfig, actorSystem: ActorSystem, cache: Ref[Cache])(request: HttpRequest):
   Future[HttpResponse] = {
     implicit val system: ActorSystem = actorSystem
     import scala.concurrent.duration._

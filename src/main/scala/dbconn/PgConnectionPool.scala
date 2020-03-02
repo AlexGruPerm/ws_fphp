@@ -1,14 +1,9 @@
 package dbconn
 
-import java.net.URI
-import java.sql.{Connection, DriverManager}
-
+import java.sql.{Connection}
 import confs.DbConfig
 import org.apache.commons.dbcp2.BasicDataSource
-import org.postgresql.util.PSQLException
 import reqdata.Dict
-import zio.{Task, ZIO}
-import zio.blocking._
 
 /**
 

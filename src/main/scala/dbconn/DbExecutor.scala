@@ -82,11 +82,20 @@ object DbExecutor {
 
   import zio.blocking._
 
-  private def getDictFromCursor: (List[DbConfig], Dict, Ref[Cache]) => ZIO[ZEnv, Throwable, DictDataRows] =
-    (configuredDbList, trqDict, cache) =>
+  private def getDictFromCursor: (DbConfig, Dict, Ref[Cache]) => ZIO[ZEnv, Throwable, DictDataRows] =
+    (configuredDb, trqDict, cache) =>
       for {
-        thisConfig <- ZIO.fromOption(configuredDbList.find(dbc => dbc.name == trqDict.db))
-          .mapError(_ => new NoSuchElementException(s"Database name [${trqDict.db}] not found in config."))
+        thisConfig <-
+          if (configuredDb.name==trqDict.db) {
+            Task(configuredDb)
+          }
+          else {
+            IO.fail(new NoSuchElementException(s"Database name [${trqDict.db}] not found in config."))
+          }
+          //configuredDbList.find(dbc => dbc.name == trqDict.db)
+
+          //.mapError(_ => new NoSuchElementException(s"Database name [${trqDict.db}] not found in config."))
+
         tBeforeOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
         //connections without pool.
         //thisConnection <- (new PgConnection).sess(thisConfig, trqDict.name)
@@ -107,14 +116,14 @@ object DbExecutor {
       } yield ds
 
 
-  val getDict: (List[DbConfig], Dict, Ref[Cache]) => ZIO[ZEnv, Throwable, DictDataRows] =
-    (configuredDbList, trqDict, cache) =>
+  val getDict: (DbConfig, Dict, Ref[Cache]) => ZIO[ZEnv, Throwable, DictDataRows] =
+    (configuredDb, trqDict, cache) =>
       (for {
         valFromCache <- getValueFromCache(trqDict.hashCode(), cache)
         _ <- putStrLn(s">>>>>> value found in cache ${valFromCache.name}")
       } yield valFromCache).foldM(
          _ => for {
-          db <- getDictFromCursor(configuredDbList, trqDict, cache)
+          db <- getDictFromCursor(configuredDb, trqDict, cache)
           _ <- putStrLn(s"<<<<<< value get from db ${db.name}")
            _ <- updateValueInCache(trqDict.hashCode(),cache,Task(db))
          } yield db,

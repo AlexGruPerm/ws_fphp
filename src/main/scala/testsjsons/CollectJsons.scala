@@ -638,37 +638,38 @@ object CollectJsons {
       |                "dicts": [
       |                {
       |                  "name" : "period",
-      |                  "db" : "db1",
+      |                  "db" : "dbp",
       |                  "proc" : "prm_salary.pkg_web_cons_rep_input_period_list(refcur => ?)"
       |                },
       |                  {
       |                    "name" : "oiv",
-      |                    "db" : "db2",
+      |                    "db" : "dbp",
       |                    "proc" : "prm_salary.pkg_web_cons_rep_grbs_list(refcur => ?, p_user_id => 45224506)"
       |                  },
       |                {
       |                 "name" : "institution",
-      |                  "db" : "db1",
+      |                  "db" : "dbp",
       |                  "proc" : "prm_salary.pkg_web_cons_rep_institution_list(refcur => ?, p_user_id => 45224506)"
       |                },
       |                {
       |                  "name" : "industry_class",
-      |                  "db" : "db2",
+      |                  "db" : "dbp",
       |                  "proc":"prm_salary.pkg_web_cons_rep_form_type_list(refcur => ?)"
       |                },
       |                {
       |                  "name" : "territory",
-      |                  "db" : "db1",
+      |                  "db" : "dbp",
       |                  "proc":"prm_salary.pkg_web_cons_rep_territory_list(refcur => ?)"
       |                },
       |                {
       |                  "name" : "okfs",
-      |                  "db" : "db2",
+      |                  "db" : "dbp",
       |                  "proc":"prm_salary.pkg_web_cons_rep_okved_list(refcur => ?)"
       |                }
       |              ]
       |             }
       |""".stripMargin
+
 
   val reqJsonText___ =
     """
