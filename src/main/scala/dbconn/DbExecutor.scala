@@ -66,11 +66,12 @@ object DbExecutor {
       .refineToOrDie[NoSuchElementException]
 
 
-  private def updateValueInCache(hashKey: Int, cache: Ref[Cache], ds: Task[DictDataRows]) :Task[Unit] =
+  private def updateValueInCache(hashKey: Int, cache: Ref[Cache], ds: Task[DictDataRows],
+                                 reftables: Option[Seq[String]]): Task[Unit] =
     for {
     dictRows <- ds
     _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1,
-      dictsMap = cv.dictsMap + (hashKey -> CacheEntity(System.currentTimeMillis,dictRows)))
+      dictsMap = cv.dictsMap + (hashKey -> CacheEntity(System.currentTimeMillis,dictRows, reftables.getOrElse(Seq()))))
     )
   } yield UIO.succeed(())
 
@@ -102,7 +103,7 @@ object DbExecutor {
         //todo: try pass it direct (new PgConnection).sess(thisConfig)
         dsCursor = getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration)
         hashKey :Int = trqDict.hashCode() //todo: add user_session
-        _ <- updateValueInCache(hashKey, cache, dsCursor)
+        _ <- updateValueInCache(hashKey, cache, dsCursor, trqDict.reftables)
         ds <- dsCursor
         //we absolutely need close it to return to the pool
         _ = thisConnection.sess.close()
@@ -119,7 +120,7 @@ object DbExecutor {
          _ => for {
           db <- getDictFromCursor(configuredDb, trqDict, cache)
           _ <- putStrLn(s"<<<<<< value get from db ${db.name}")
-           _ <- updateValueInCache(trqDict.hashCode(),cache,Task(db))
+           _ <- updateValueInCache(trqDict.hashCode(),cache,Task(db),trqDict.reftables)
          } yield db,
         v  => Task(v)
   )

@@ -77,6 +77,7 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
                   // todo: here we need search all hashKeys where exists reference on table nt.getParameter.
                   //       and use it to clear cache entities.
                   //
+                  _ <- removeFromCacheByRefTable(cache,nt.getParameter)
                   _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1, dictsMap = cv.dictsMap - (1670615853, -1839933013)))
                 } yield UIO.succeed(())
               } else {
@@ -91,6 +92,31 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
       }.provideSomeM(env)
     } yield ()
 
+
+  /**
+   * Is field reftables from Class CacheEntity contain given tableName
+  */
+  private def hashKeysForRemove(dictsMape: Map[Int, CacheEntity], tableName: String) :Seq[Int] =
+    dictsMape.mapValues(v => v.reftables.contains(tableName)).withFilter(_._2).map(_._1).toSeq
+
+  /**
+   * Search Entity in Cache by tablename in  and remove it
+  */
+  private val removeFromCacheByRefTable: (Ref[Cache], String) => Task[Unit] = (cache, tableName) =>
+    for {
+      _ <- zio.logging.locallyAnnotate(correlationId, "cache_entity_remover") {
+        for {
+          _ <- log(LogLevel.Debug)(s"DB Listener PID = ")
+          cv <- cache.get
+          _ <- log(LogLevel.Debug)(s"All keys = ${cv.dictsMap.keySet}")
+          //produce new Map with mapValues where values are Boolean, filter it by true and get only keys.
+          foundKeys :Seq[Int] = hashKeysForRemove( cv.dictsMap,tableName)
+          _ <- log(LogLevel.Debug)(s"keys for removing from cache $foundKeys")
+          _ <- cache.update(cvu => cvu.copy(HeartbeatCounter = cvu.HeartbeatCounter + 1,
+            dictsMap = cvu.dictsMap -- foundKeys))
+        } yield ()
+      }.provideSomeM(env)
+    } yield ()
 
 
     /*
@@ -119,7 +145,7 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
     val wsRes = Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
         for {
-          cache <- Ref.make(Cache(0, Map(1 -> CacheEntity(DictDataRows("empty", 0L, 0L, 0L, List(List()))))))
+          cache <- Ref.make(Cache(0, Map(1 -> CacheEntity(DictDataRows("empty", 0L, 0L, 0L, List(List())),Seq()))))
           cacheInitialValue <- cache.get
           _ <- zio.logging.locallyAnnotate(correlationId, "wsserver") {
             log(LogLevel.Info)(s"Before startRequestHandler. Cache created with $cacheInitialValue")
