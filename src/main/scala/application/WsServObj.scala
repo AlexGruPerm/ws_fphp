@@ -70,7 +70,7 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
 
           _ <- (
             ZIO.foreach(notifications) { nt =>
-              if (nt.getName == "change" && nt.getParameter == "listener_notify") {
+              if (nt.getName == "change") {
                 for {
                   _ <- log(LogLevel.Debug)(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
                   //
@@ -78,7 +78,6 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
                   //       and use it to clear cache entities.
                   //
                   _ <- removeFromCacheByRefTable(cache,nt.getParameter)
-                  _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1, dictsMap = cv.dictsMap - (1670615853, -1839933013)))
                 } yield UIO.succeed(())
               } else {
                 UIO.succeed(())
