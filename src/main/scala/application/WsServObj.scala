@@ -139,7 +139,7 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
    * https://medium.com/@ghostdogpr/combining-zio-and-akka-to-enable-distributed-fp-in-scala-61ffb81e3283
    *
    */
-  val WsServer: Config => ZIO[ZEnv, Throwable, Unit] = conf => {
+  val WsServer: Config => ZIO[Env.ZEnvLog, Throwable, Unit] = conf => {
     import zio.duration._
     val wsRes = Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
