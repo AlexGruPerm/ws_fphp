@@ -12,7 +12,7 @@ case class DictRow(name: String, value: String)
  * https://github.com/circe/circe/issues/892
  * if value has null as value, it can produce NPE
  *
- * scala> Foo.x
+ * scala> Foo.modules.logging.logging.x
  * java.lang.NullPointerException
  * at io.circe.Printer$PrintingFolder.onString(Printer.scala:272)
  * at io.circe.Printer$PrintingFolder.onString(Printer.scala:256)

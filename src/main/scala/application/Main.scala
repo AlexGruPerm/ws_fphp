@@ -1,11 +1,10 @@
 package application
 
-import application.Main.ZEnvLog
 import confs.Configuration
-import logging.loggercommon
-import zio.{Chunk, Task, UIO, URIO, ZEnv, ZIO, ZLayer}
+import envs.EnvContainer
+import modules.Wslogging.Wslogger
+import zio.{Task, UIO, ZEnv, ZIO, ZLayer}
 import zio.logging._
-import logging.loggercommon.Wslogger
 
 /**
  * https://zio.dev/docs/overview/overview_index
@@ -16,18 +15,27 @@ import logging.loggercommon.Wslogger
 
 object Main extends zio.App {
 
-  val WsApp: List[String] => ZIO[ZEnv with Wslogger, Nothing, Unit] = args =>
+  private def checkArgs : List[String] => ZIO[ZEnv,Throwable,Unit] = args => for {
+    checkRes <- if (args.length < 0) {
+      Task.fail(new IllegalArgumentException("Need config file as parameter."))}
+    else {UIO.succeed(())
+    }
+  } yield checkRes
+
+  private def WsApp: List[String] => ZIO[ZEnv with Wslogger, Throwable, Unit] = args =>
     for {
-      _ <- Wslogger.info("Hello info.")
-      _ <- Wslogger.info("Hello debug.")
-      res <- Task.unit
+      _ <- Wslogger.out(LogLevel.Info)("Web service starting")
+      _ <- checkArgs(args)
+      //cfg <- Configuration.config.load("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/application.conf")
+      //cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
+      cfg <- Configuration.config.load("C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\application.conf")
+      res <- WsServObj.WsServer(cfg)
+      _ <- Wslogger.out(LogLevel.Info)("Web service stopping")
     } yield res
 
-  val ZEnvLog: ZLayer.NoDeps[Nothing, ZEnv with Wslogger] =
-    ZEnv.live ++ Wslogger.ZLayerLogger
 
   override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] =
-    WsApp(args).provideCustomLayer(ZEnvLog).fold(_ => 1, _ => 0)
+    WsApp(args).provideCustomLayer(envs.EnvContainer.ZEnvLog).fold(_ => 1, _ => 0)
 
 }
 
@@ -39,12 +47,7 @@ object Main extends zio.App {
 
 
   /*
-  private val checkArgs : List[String] => Task[Unit] = args => for {
-    checkRes <- if (args.length < 0) {
-      Task.fail(new IllegalArgumentException("Need config file as parameter."))}
-    else {UIO.succeed(())
-    }
-  } yield checkRes
+
 */
 
 
@@ -60,6 +63,7 @@ object Main extends zio.App {
 */
   /*
   _ <- checkArgs(args)
+    //cfg <- Configuration.config.load("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/application.conf")
   cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
   res <- WsServObj.WsServer(cfg)
   */
@@ -70,6 +74,6 @@ object Main extends zio.App {
 
 
 
-  //cfg <- Configuration.config.load("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/application.conf")
+
 //}
 

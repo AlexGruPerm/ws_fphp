@@ -38,8 +38,8 @@ libraryDependencies ++= Seq(
   "com.typesafe" % "config" % Versions.typeSefeConf,
   "org.postgresql" % "postgresql" % Versions.pgVers,
   "dev.zio" %% "zio" % Versions.zioVers,
-  "dev.zio" %% "zio-logging" % Versions.zioLog,
-  "dev.zio" %% "zio-logging-slf4j" % Versions.zioLogSlf4j,
+  "dev.zio" %% "zio-modules.modules.logging.logging" % Versions.zioLog,
+  "dev.zio" %% "zio-modules.modules.logging.logging-slf4j" % Versions.zioLogSlf4j,
   "com.github.pureconfig" %% "pureconfig" % Versions.zioPureConf,
   "org.apache.commons" % "commons-dbcp2" % Versions.dbcp2Vers
 )

@@ -13,13 +13,13 @@ import io.circe.Printer
 import org.postgresql.jdbc.PgResultSet
 import io.circe.generic.auto._
 import io.circe.syntax._
-import logging.LoggerCommon.correlationId
+import modules.Wslogging.Wslogger
 import org.postgresql.util.PSQLException
 import reqdata.Dict
 import zio.clock.Clock
 import zio.console.putStrLn
 import zio.logging.{LogLevel, Logging, log}
-import zio.{DefaultRuntime, IO, RIO, Ref, Task, UIO, ZEnv, ZIO, clock}
+import zio.{IO, RIO, Ref, Task, UIO, ZEnv, ZIO, clock}
 
 
 //  loggetDict <- ZIO.access[Logging](_.logger)
@@ -111,15 +111,17 @@ object DbExecutor {
       } yield ds
 
 
-  val getDict: (DbConfig, Dict, Ref[Cache]) => ZIO[ZEnv, Throwable, DictDataRows] =
+  val getDict: (DbConfig, Dict, Ref[Cache]) => ZIO[ZEnv with Wslogger, Throwable, DictDataRows] =
     (configuredDb, trqDict, cache) =>
       (for {
         valFromCache <- getValueFromCache(trqDict.hashCode(), cache)
-        _ <- putStrLn(s">>>>>> value found in cache ${valFromCache.name} for hashKey=${trqDict.hashCode()}")
+       // _ <- putStrLn(s">>>>>> value found in cache ${valFromCache.name} for hashKey=${trqDict.hashCode()}")
+        _ <- Wslogger.out(LogLevel.Info)(s">>>>>> value found in cache ${valFromCache.name} for hashKey=${trqDict.hashCode()}")
       } yield valFromCache).foldM(
          _ => for {
           db <- getDictFromCursor(configuredDb, trqDict, cache)
-          _ <- putStrLn(s"<<<<<< value get from db ${db.name}")
+          //_ <- putStrLn(s"<<<<<< value get from db ${db.name}")
+          _ <- Wslogger.out(LogLevel.Info)(s"<<<<<< value get from db ${db.name}")
            _ <- updateValueInCache(trqDict.hashCode(),cache,Task(db),trqDict.reftables)
          } yield db,
         v  => Task(v)
