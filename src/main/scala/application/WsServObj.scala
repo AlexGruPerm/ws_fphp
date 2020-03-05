@@ -1,5 +1,7 @@
 package application
 
+import java.util.concurrent.Executors
+
 import akka.Done
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http.{IncomingConnection, ServerBinding}
@@ -18,7 +20,7 @@ import zio.logging.{LogLevel, log}
 import zio.{Runtime, _}
 
 import scala.Option
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import scala.language.postfixOps
 
 //ex of using Ref for cache. https://stackoverflow.com/questions/57252919/scala-zio-ref-datatype
@@ -32,15 +34,8 @@ object WsServObj {
   private val cacheChecker: (Ref[Cache]) => ZIO[ZEnv with Wslogger, Nothing, Unit] = (cache) =>
     for {
       cacheCurrentValue <- cache.get
-
-      _ <- Wslogger.out(LogLevel.Info)("Web service starting")
-
-      //_  <- zio.logging.locallyAnnotate(correlationId,"cache_checker"){
-      //  log(LogLevel.Debug)(s"cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
-      //    s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
-      //}.provideSomeM(env)
-
-
+      _ <- Wslogger.out(LogLevel.Info)(s"cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
+            s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
       _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1))//todo: remove.
     } yield ()
 
@@ -154,26 +149,22 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
           cacheInitialValue <- cache.get
 
           _ <- Wslogger.out(LogLevel.Info)(s"Before startRequestHandler. Cache created with $cacheInitialValue")
-         // _ <- zio.logging.locallyAnnotate(correlationId, "wsserver") {
-         //   log(LogLevel.Info)(s"Before startRequestHandler. Cache created with $cacheInitialValue")
-         // }.provideSomeM(env)
+          // _ <- zio.logging.locallyAnnotate(correlationId, "wsserver") {
+          //   log(LogLevel.Info)(s"Before startRequestHandler. Cache created with $cacheInitialValue")
+          // }.provideSomeM(env)
 
-          fiber <- startRequestHandler(cache, conf, actorSystem).fork
+          fiber <- startRequestHandler(cache, conf, actorSystem).disconnect.fork
           _ <- fiber.join
 
           thisConnection <- (new PgConnection).sess(conf.dbListenConfig)
 
-          cacheCheckerValidaot <- cacheValidator(cache,thisConnection).repeat(Schedule.spaced(3.second)).fork *>
-           cacheChecker(cache).repeat(Schedule.spaced(4.second)).fork
-          _ <- cacheCheckerValidaot.join
-
+          cacheCheckerValidation <- cacheValidator(cache,thisConnection).repeat(Schedule.spaced(3.second)).disconnect.fork/*fork*/ *>
+           cacheChecker(cache).repeat(Schedule.spaced(4.second)).disconnect.fork /*fork*/
+          _ <- cacheCheckerValidation.join
           _ <- Wslogger.out(LogLevel.Info)("After startRequestHandler, end of WsServer.")
-         // _ <- zio.logging.locallyAnnotate(correlationId, "wsserver") {
-          //  log(LogLevel.Info)("After startRequestHandler, end of WsServer.")
-         // }.provideSomeM(env)
-
         } yield ()
     )
+
     /** examples:
      * reqHandlerResult <- startRequestHandler(conf, actorSystem).flatMap(_ => ZIO.never)
      * //_  <- UIO.succeed(()).repeat(Schedule.spaced(1.second))
@@ -208,19 +199,17 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
   def reqHandlerM(dbConfigList: DbConfig, actorSystem: ActorSystem, cache: Ref[Cache])(request: HttpRequest):
   Future[HttpResponse] = {
     implicit val system: ActorSystem = actorSystem
-    import scala.concurrent.duration._
     import akka.http.scaladsl.unmarshalling.Unmarshal
-    implicit val timeout: Timeout = Timeout(60 seconds)
-    implicit val executionContext: ExecutionContextExecutor = system.dispatcher
+    //implicit val ec: ExecutionContextExecutor = system.dispatcher //todo: remove
+    implicit val fixedTpEc = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(1))
     import ReqResp._
 
-    val responseFuture: ZIO[ZEnv with Wslogger, Throwable, HttpResponse] =
-      request match {// m.b. future HttpMethods.OPTIONS for http/2
-        case request@HttpRequest(HttpMethods.POST, Uri.Path("/dicts"), _, _, _) =>
-      {
-        val reqEntityString :Future[String] = Unmarshal(request.entity).to[String]
-        routeDicts(request, cache, dbConfigList, reqEntityString)
-      }
+    lazy val responseFuture: ZIO[ZEnv with Wslogger, Throwable, HttpResponse] =
+      request match {
+        case request@HttpRequest(HttpMethods.POST, Uri.Path("/dicts"), _, _, _) => {
+          val reqEntityString: Future[String] = Unmarshal(request.entity).to[String]
+          routeDicts(request, cache, dbConfigList, reqEntityString)
+        }
         case request@HttpRequest(HttpMethods.GET, _, _, _, _) =>
           request match {
             case request@HttpRequest(_, Uri.Path("/debug"), _, _, _) => routeGetDebug(request)
@@ -232,11 +221,12 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
         }
       }
 
-    //(new DefaultRuntime {}).unsafeRunToFuture(responseFuture)
-
+    //todo: rc18 bug: https://github.com/zio/zio/issues/3013
     Runtime.default.unsafeRunToFuture(responseFuture.provideLayer(EnvContainer.ZEnvLog))
-
+    //Runtime.default.unsafeRunToFuture(responseFuture.provideLayer(EnvContainer.ZEnvLog).lock(zio.internal.Executor.fromExecutionContext(1)(fixedTpEc)))
+    //Runtime.default.unsafeRunToFuture(responseFuture.provideLayer(EnvContainer.ZEnvLog).lock(zio.internal.Executor.fromExecutionContext(10)(ec)))
   }
+
 
 
   /**
@@ -257,24 +247,19 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
     import akka.stream.scaladsl.Source
       for {
         ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(conf,actorSystem)
-
         _ <- Wslogger.out(LogLevel.Info)("ServerSource created")
-       // _  <- zio.logging.locallyAnnotate(correlationId,"req-handler"){
-       //   log(LogLevel.Info)(s"ServerSource created")
-       //   }.provideSomeM(env)
 
         // Curried version of reqHandlerM has type HttpRequest => Future[HttpResponse]
         reqHandlerFinal <- Task(reqHandlerM(conf.dbConfig, actorSystem, cache) _)
-
-        requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] = ZIO.fromFunction((r: HttpRequest) =>
-          reqHandlerFinal(r))
-
-        serverWithReqHandler: RIO[IncConnSrvBind, Future[Done]] = ZIO.fromFunction((srv: IncConnSrvBind) =>
+        requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] =
+        ZIO.fromFunction((r: HttpRequest) =>  reqHandlerFinal(r))
+        serverWithReqHandler: RIO[IncConnSrvBind, Future[Done]] =
+        ZIO.fromFunction((srv: IncConnSrvBind) =>
           srv.runForeach {
-            conn => conn.handleWithAsyncHandler(
-              //r => new DefaultRuntime {}.unsafeRun(requestHandlerFunc.provide(r))
-              r =>  Runtime.default.unsafeRun(requestHandlerFunc.provide(r))
-            )
+            conn =>
+              conn.handleWithAsyncHandler(
+                r => Runtime.default.unsafeRun(requestHandlerFunc.provide(r))
+              )
           }
         )
         sourceWithServer <- serverWithReqHandler.provide(ss)

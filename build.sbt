@@ -5,14 +5,14 @@ version := "1.0"
 scalaVersion := "2.12.8"
 
 lazy val Versions = new {
-  val akka = "2.6.1"
+  val akka = "2.6.3"
   val akkaHttp  = "10.1.11"
   val circeVers = "0.12.3"
   val logbackVers = "1.2.3"
   val pgVers = "42.2.5"
   val zioVers = "1.0.0-RC18"
-  val zioLog = "0.2.0"
-  val zioLogSlf4j = "0.2.0"
+  val zioLog = "0.2.2"
+  val zioLogSlf4j = "0.2.2"
   val dbcp2Vers = "2.7.0"
   val jschVers = "0.1.55"
   val zioPureConf = "0.12.2"
@@ -24,13 +24,14 @@ scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked")
 resolvers ++= Seq(
   Resolver.sonatypeRepo("releases"),
   Resolver.typesafeRepo("releases"),
-  Resolver.bintrayRepo("websudos", "oss-releases")
+  Resolver.bintrayRepo("websudos", "oss-releases"),
+  Resolver.sonatypeRepo("releases"),
+  Resolver.sonatypeRepo("public")
 )
 
-//paradise for using circe annotations, f.e. @JsonCodec case class DbErrorDesc
-resolvers += Resolver.sonatypeRepo("releases")
-resolvers += Resolver.sonatypeRepo("public")
+resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
 
+//paradise for using circe annotations, f.e. @JsonCodec case class DbErrorDesc
 addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 
 libraryDependencies ++= Seq(
@@ -38,8 +39,8 @@ libraryDependencies ++= Seq(
   "com.typesafe" % "config" % Versions.typeSefeConf,
   "org.postgresql" % "postgresql" % Versions.pgVers,
   "dev.zio" %% "zio" % Versions.zioVers,
-  "dev.zio" %% "zio-modules.modules.logging.logging" % Versions.zioLog,
-  "dev.zio" %% "zio-modules.modules.logging.logging-slf4j" % Versions.zioLogSlf4j,
+  "dev.zio" %% "zio-logging" % Versions.zioLog,
+  "dev.zio" %% "zio-logging-slf4j" % Versions.zioLogSlf4j,
   "com.github.pureconfig" %% "pureconfig" % Versions.zioPureConf,
   "org.apache.commons" % "commons-dbcp2" % Versions.dbcp2Vers
 )
@@ -69,4 +70,8 @@ assemblyMergeStrategy in assembly := {
 assemblyJarName in assembly :="wsfphp.jar"
 mainClass in (Compile, packageBin) := Some("application.Main")
 mainClass in (Compile, run) := Some("application.Main")
+/*
 
+  "dev.zio" %% "zio-logging" % "0.2.3",
+  "dev.zio" %% "zio-logging-slf4j" % "0.2.3",
+*/

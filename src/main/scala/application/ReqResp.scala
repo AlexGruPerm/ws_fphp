@@ -159,13 +159,14 @@ object ReqResp {
           Task.fail(
             NoConfigureDbInRequest(accumRes.flatten.head)
           )
-        } else Task.succeed(())
+        } else {Task.succeed(())
+        }
 
       } yield checkResult //UIO.succeed(())
 
   import zio.blocking._
 
-  val routeDicts: (HttpRequest, Ref[Cache], DbConfig, Future[String]) => ZIO[ZEnv with Wslogger, Throwable, HttpResponse] =
+  lazy val routeDicts: (HttpRequest, Ref[Cache], DbConfig, Future[String]) => ZIO[ZEnv with Wslogger, Throwable, HttpResponse] =
     (request, cache, configuredDbList, reqEntity) =>
       for {
         _ <- logRequest(request)

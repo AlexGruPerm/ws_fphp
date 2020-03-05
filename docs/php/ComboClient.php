@@ -76,7 +76,7 @@ class ComboClient {
                   foreach($row as $cell){
                     $singleRow[$cell->name] = $cell->value;  
                   }
-                  // id = 1 name = "ЗП - Здрав" 
+                  // id = 1 name = "пїЅпїЅ - пїЅпїЅпїЅпїЅпїЅ" 
                   $tmpRows[$singleRow['id'].'_ID_COL_1'] = 
                           iconv("UTF-8", "CP1251", $singleRow['name']).'***';      
                 } 
@@ -98,7 +98,7 @@ class ComboClient {
             }   
         }
 
-        $res[-1] = 'Итого';
+        $res[-1] = 'пїЅпїЅпїЅпїЅпїЅ';
         */
 
         } else {
@@ -116,8 +116,8 @@ class ComboClient {
      * ID_COL_1; ID_COL_2; ID_COL_3 
      *  
     * @param $left_header instance of class Header
-    *     {ID_COL_1;0;1;ID_COL_1;tratra;text;krai_oiv;Краевые ГРБС},
-    *     {ID_COL_2;0;1;ID_COL_2;tratra;text;industry_class;Отрасль/Подотрасль}
+    *     {ID_COL_1;0;1;ID_COL_1;tratra;text;krai_oiv;пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ},
+    *     {ID_COL_2;0;1;ID_COL_2;tratra;text;industry_class;пїЅпїЅпїЅпїЅпїЅпїЅпїЅ/пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ}
      * 
     * @return array of dictionaries, like :
      * 
@@ -162,7 +162,7 @@ class ComboClient {
         "cont_encoding_gzip_enabled" => 1,
         "thread_pool" => "block",
         "request_timeout_ms" => 5000,
-        "cache_live_time" => 60000,
+        "cache_live_time" => 120000,
         "dicts" => $list_requested_dicts);
      
      $wsResDicts = $this->HTTPPost($wsurl, $combCodeArray, $reqDictsArray);

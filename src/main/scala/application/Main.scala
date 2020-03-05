@@ -4,7 +4,8 @@ import confs.Configuration
 import envs.EnvContainer
 import modules.Wslogging.Wslogger
 import zio.{Task, UIO, ZEnv, ZIO, ZLayer}
-import zio.logging._
+import zio.logging.{LogLevel}
+import zio.console.putStrLn
 
 /**
  * https://zio.dev/docs/overview/overview_index
@@ -22,20 +23,23 @@ object Main extends zio.App {
     }
   } yield checkRes
 
-  private def WsApp: List[String] => ZIO[ZEnv with Wslogger, Throwable, Unit] = args =>
+  private def wsApp: List[String] => ZIO[ZEnv with Wslogger, Throwable, Unit] = args =>
     for {
       _ <- Wslogger.out(LogLevel.Info)("Web service starting")
       _ <- checkArgs(args)
-      //cfg <- Configuration.config.load("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/application.conf")
-      //cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
-      cfg <- Configuration.config.load("C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\application.conf")
+      cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
       res <- WsServObj.WsServer(cfg)
       _ <- Wslogger.out(LogLevel.Info)("Web service stopping")
     } yield res
 
-
   override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] =
-    WsApp(args).provideCustomLayer(envs.EnvContainer.ZEnvLog).fold(_ => 1, _ => 0)
+    wsApp(args).provideCustomLayer(envs.EnvContainer.ZEnvLog)
+      .foldM(throwable => putStrLn(s"Error: ${throwable.getMessage}") *>
+            ZIO.foreach(throwable.getStackTrace) { sTraceRow =>
+              putStrLn(s"$sTraceRow")
+            } as 1,
+        _ =>  putStrLn(s"Success exit of application.") as 0
+      )
 
 }
 
@@ -61,19 +65,4 @@ object Main extends zio.App {
   _ =>  log(LogLevel.Info)(s"Success exit of application.") as 0
 )
 */
-  /*
-  _ <- checkArgs(args)
-    //cfg <- Configuration.config.load("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/application.conf")
-  cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
-  res <- WsServObj.WsServer(cfg)
-  */
-
-
-
-
-
-
-
-
-//}
 
