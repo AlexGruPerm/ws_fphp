@@ -35,60 +35,65 @@ object WsServObj {
     for {
       cacheCurrentValue <- cache.get
       _ <- logInfo(s"cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
-            s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
-      _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1))//todo: remove.
+        s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
+      _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1)) //todo: remove.
     } yield ()
 
   /**
-
-  CREATE OR REPLACE FUNCTION notify_change() RETURNS TRIGGER AS $$
-    BEGIN
-        perform pg_notify('change', TG_TABLE_NAME);
-        RETURN NULL;
-    END;
-$$ LANGUAGE plpgsql;
-
-drop TRIGGER trg_ch_listener_notify on listener_notify;
-
-create TRIGGER trg_ch_listener_notify
-AFTER INSERT OR UPDATE OR DELETE ON listener_notify
-FOR EACH statement EXECUTE PROCEDURE notify_change();
-
+   **
+   *CREATE OR REPLACE FUNCTION notify_change() RETURNS TRIGGER AS $$
+   * BEGIN
+   * perform pg_notify('change', TG_TABLE_NAME);
+   * RETURN NULL;
+   * END;
+   * $$ LANGUAGE plpgsql;
+   **
+   *drop TRIGGER trg_ch_listener_notify on listener_notify;
+   **
+   *create TRIGGER trg_ch_listener_notify
+   * AFTER INSERT OR UPDATE OR DELETE ON listener_notify
+   * FOR EACH statement EXECUTE PROCEDURE notify_change();
+   *
    */
-  private val cacheValidator: (Ref[Cache], pgSessListen) => ZIO[ZEnvLog,Nothing,Unit] = (cache, pgsessLs) =>
-        for {
-          _ <- logInfo(s"DB Listener PID = ${pgsessLs.pid}")
-          notifications = scala.Option(pgsessLs.sess.getNotifications).getOrElse(Array[PGNotification]()) //timeout
 
-          _ <- //Wslogger.out(LogLevel.Info)(s"notifications size = ${notifications.size}")
-            (if (notifications.size != 0) {
-              logInfo(s"notifications size = ${notifications.size}")
-          } else {
-              logInfo(s"notifications size = 0")
-          })
+  private val cacheValidator: (Ref[Cache], DbConfig, PgConnection) => ZIO[ZEnvLog, Throwable, Unit] = (cache, conf, pgsessSrc) => {
+    import zio.duration._
+    for {
+      pgsessLs <- pgsessSrc.sess orElse
+        PgConnection(conf).sess.retry(Schedule.recurs(3) && Schedule.spaced(2.seconds))
 
-          _ <- (
-            ZIO.foreach(notifications) { nt =>
-              if (nt.getName == "change") {
-                for {
-                  //_ <- log(LogLevel.Debug)(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
-                  _ <- logInfo(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
-                  //
-                  // todo: here we need search all hashKeys where exists reference on table nt.getParameter.
-                  //       and use it to clear cache entities.
-                  //
-                  _ <- removeFromCacheByRefTable(cache,nt.getParameter)
-                } yield UIO.succeed(())
-              } else {
-                UIO.succeed(())
-              }
-            }
-            ).catchAllCause {
-            e => logInfo(s" cacheValidator Exception $e")
-          }
+      _ <- logInfo(s"DB Listener PID = ${pgsessLs.pid}")
+      notifications = scala.Option(pgsessLs.sess.getNotifications).getOrElse(Array[PGNotification]()) //timeout
 
-    } yield ()
+      _ <- //Wslogger.out(LogLevel.Info)(s"notifications size = ${notifications.size}")
+        (if (notifications.size != 0) {
+          logInfo(s"notifications size = ${notifications.size}")
+        } else {
+          logInfo(s"notifications size = 0")
+        })
 
+    _ <- (
+      ZIO.foreach(notifications) { nt =>
+        if (nt.getName == "change") {
+          for {
+            //_ <- log(LogLevel.Debug)(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
+            _ <- logInfo(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
+            //
+            // todo: here we need search all hashKeys where exists reference on table nt.getParameter.
+            //       and use it to clear cache entities.
+            //
+            _ <- removeFromCacheByRefTable(cache, nt.getParameter)
+          } yield UIO.succeed(())
+        } else {
+          UIO.succeed(())
+        }
+      }
+      ).catchAllCause {
+      e => logInfo(s" cacheValidator Exception $e")
+    }
+
+  } yield ()
+}
 
   /**
    * Is field reftables from Class CacheEntity contain given tableName
@@ -149,17 +154,15 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
           cacheInitialValue <- cache.get
 
           _ <- logInfo(s"Before startRequestHandler. Cache created with $cacheInitialValue")
-          // _ <- zio.logging.locallyAnnotate(correlationId, "wsserver") {
-          //   log(LogLevel.Info)(s"Before startRequestHandler. Cache created with $cacheInitialValue")
-          // }.provideSomeM(env)
 
           fiber <- startRequestHandler(cache, conf, actorSystem).disconnect.fork
           _ <- fiber.join
 
-          thisConnection <- (new PgConnection).sess(conf.dbListenConfig)
+          thisConnection = (new PgConnection(conf.dbListenConfig))
+          cacheCheckerValidation <- cacheValidator(cache, conf.dbListenConfig, thisConnection)
 
-          cacheCheckerValidation <- cacheValidator(cache,thisConnection).repeat(Schedule.spaced(3.second)).disconnect.fork/*fork*/ *>
-           cacheChecker(cache).repeat(Schedule.spaced(4.second)).disconnect.fork /*fork*/
+            .repeat(Schedule.spaced(3.second)).disconnect.fork *>
+            cacheChecker(cache).repeat(Schedule.spaced(4.second)).disconnect.fork
           _ <- cacheCheckerValidation.join
           _ <- logInfo("After startRequestHandler, end of WsServer.")
         } yield ()
@@ -224,11 +227,10 @@ FOR EACH statement EXECUTE PROCEDURE notify_change();
       }
     }
 
-
     Runtime.default.unsafeRunToFuture(
       responseFuture.provideLayer(zio.ZEnv.live >>> envs.EnvContainer.ZEnvLogLayer)
     )
-    
+
   }
 
   //todo: rc18 bug: https://github.com/zio/zio/issues/3013

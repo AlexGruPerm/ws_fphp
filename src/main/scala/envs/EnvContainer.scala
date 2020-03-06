@@ -15,6 +15,5 @@ object EnvContainer {
       logEntry
     )
 
-  val ZEnvLogLayer: ZLayer[ZEnv, Nothing, ZEnvLog] =
-    ZEnv.live ++ env
+  val ZEnvLogLayer:  ZLayer[ZEnv, Nothing, ZEnvLog]= ZEnv.live ++ env
 }
