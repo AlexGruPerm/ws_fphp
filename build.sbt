@@ -11,6 +11,7 @@ lazy val Versions = new {
   val logbackVers = "1.2.3"
   val pgVers = "42.2.5"
   val zioVers = "1.0.0-RC18"
+  //val zioVers = "0.2.0+3061-72c7c2a7-SNAPSHOT"
   val zioLog = "0.2.3"
   val zioLogSlf4j = "0.2.3"
   val dbcp2Vers = "2.7.0"
