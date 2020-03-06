@@ -18,16 +18,14 @@ import akka.util.ByteString
 import confs.{Config, DbConfig}
 import data.{Cache, CacheEntity, DbErrorDesc, DictDataRows, DictRow, DictsDataAccum, RequestResult}
 import dbconn.{DbExecutor, PgConnection}
+import envs.EnvContainer.ZEnvLog
 import io.circe.generic.JsonCodec
 import io.circe.parser.parse
 import io.circe.{Decoder, Encoder, Json, Printer}
 import io.circe.syntax._
-import modules.Wslogging.Wslogger
-import zio.ZEnv
-//import modules.logging.LoggerCommon.{env, _}
+import zio.{Cause, IO, Ref, Schedule, Task, UIO, URIO, ZEnv, ZIO}
 import zio.console.putStrLn
 import zio.logging.{LogLevel, Logging, log}
-import zio.{ IO, Ref, Schedule, Task, UIO, URIO, ZEnv, ZIO}
 
 import scala.concurrent.{Await, Future}
 import scala.io.{BufferedSource, Source}
@@ -38,7 +36,7 @@ import reqdata.{Dict, NoConfigureDbInRequest, ReqParseException, RequestData}
 import zio.clock.Clock
 import io.circe.generic.JsonCodec
 import testsjsons.CollectJsons
-import modules.Wslogging.Wslogger
+import zio.logging.{LogLevel, Logging, log, logError, logInfo, logTrace}
 
 import scala.util.{Failure, Success, Try}
 
@@ -52,45 +50,37 @@ import scala.util.{Failure, Success, Try}
  *
 */
 object ReqResp {
-  //todo: remove ZEnv- it's not necc.
-  val logRequest : HttpRequest => ZIO[ZEnv with Wslogger,Throwable,Unit] = request => for {
-   // _  <- zio.logging.locallyAnnotate(correlationId,"log_request"){
-    //  for {
-    _ <- Wslogger.out(LogLevel.Trace)(s"================= ${request.method} REQUEST ${request.protocol.value} =====")
-    _ <- Wslogger.out(LogLevel.Trace)(s"uri : ${request.uri} ")
-    _ <- Wslogger.out(LogLevel.Trace)("  ---------- HEADER ---------")
-        _ <- ZIO.foreach(request.headers.zipWithIndex)(hdr => Wslogger.out(LogLevel.Trace)
-        (s"   #${hdr._2} : ${hdr._1.toString}"))
-    _ <- Wslogger.out(LogLevel.Trace)(s"  ---------------------------")
-    _ <- Wslogger.out(LogLevel.Trace)(s"entity ${request.entity.toString} ")
-    _ <- Wslogger.out(LogLevel.Trace)("========================================================")
-    //  } yield ()
-  //  }.provideSomeM(env)
+
+  val pnf:Int = 404
+
+  val logRequest: HttpRequest => ZIO[ZEnvLog, Throwable, Unit] = request => for {
+    _ <- logTrace(s"================= ${request.method} REQUEST ${request.protocol.value} =====")
+    _ <- logTrace(s"uri : ${request.uri} ")
+    _ <- logTrace("  ---------- HEADER ---------")
+    _ <- URIO.foreach(request.headers.zipWithIndex)(hdr => logTrace(s"   #${hdr._2} : ${hdr._1.toString}"))
+    _ <- logTrace(s"  ---------------------------")
+    _ <- logTrace(s"entity ${request.entity.toString} ")
+    _ <- logTrace("========================================================")
   } yield ()
 
-  //todo: remove ZEnv- it's not necc.
-  val logReqData : Task[RequestData] => ZIO[ZEnv with Wslogger,Throwable,Unit] = reqData => for {
-    rd <- reqData
-   // _  <- zio.logging.locallyAnnotate(correlationId,"log_reqdata"){
-    //  for {
-        _ <- Wslogger.out(LogLevel.Trace)("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-        _ <- Wslogger.out(LogLevel.Trace)(s"session_id = ${rd.user_session}")
-        _ <- Wslogger.out(LogLevel.Trace)(s"encoding_gzip = ${rd.cont_encoding_gzip_enabled}")
-        _ <- Wslogger.out(LogLevel.Trace)(s"dicts size = ${rd.dicts.size}")
-        _ <- URIO.foreach(rd.dicts){ d =>
-          Wslogger.out(LogLevel.Trace)(s"dict = ${d.db} - ${d.proc} ")
-          for {
-              _ <- Wslogger.out(LogLevel.Trace)(s" ref tables in dict : ${d.reftables.getOrElse(Seq()).size} ")
-            _ <- URIO.foreach(d.reftables.getOrElse(Seq())){tableName =>
-              Wslogger.out(LogLevel.Trace)(s"reftable = $tableName ")
-            }
-          } yield URIO.unit
-        }
 
-        _ <- Wslogger.out(LogLevel.Trace)("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-        }yield ()
-    //}.provideSomeM(env)
- // } yield ()
+  val logReqData: Task[RequestData] => ZIO[ZEnvLog, Throwable, Unit] = reqData => for {
+    rd <- reqData
+    _ <- logTrace("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+    _ <- logTrace(s"session_id = ${rd.user_session}")
+    _ <- logTrace(s"encoding_gzip = ${rd.cont_encoding_gzip_enabled}")
+    _ <- logTrace(s"dicts size = ${rd.dicts.size}")
+    _ <- URIO.foreach(rd.dicts) { d =>
+      logTrace(s"dict = ${d.db} - ${d.proc} ")
+      for {
+        _ <- logTrace(s" ref tables in dict : ${d.reftables.getOrElse(Seq()).size} ")
+        _ <- URIO.foreach(d.reftables.getOrElse(Seq())) { tableName =>
+          logTrace(s"  reftable = $tableName ")
+        }
+      } yield URIO.unit
+    }
+    _ <- logTrace("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+  } yield ()
 
   /**
    * This is one of client handler.
@@ -133,7 +123,7 @@ object ReqResp {
   /**
    * Function to check in one place that all dicts.db exist among configured db list (application.conf)
   */
-  val dictDbsCheckInConfig: (Task[RequestData], DbConfig) => ZIO[ZEnv with Wslogger, Throwable, Unit] =
+  val dictDbsCheckInConfig: (Task[RequestData], DbConfig) => ZIO[ZEnvLog, Throwable, Unit] =
     (requestData, configuredDB) =>
       for {
         //logChecker <- ZIO.access[Logging](_.logger)xxxx
@@ -153,7 +143,7 @@ object ReqResp {
             }
           }
         */
-        _ <- Wslogger.out(LogLevel.Error)("error message here - remove it.")
+        //_ <- logError("error message here - remove it.") //todo: how cover String in Cause and what is Cause
 
         checkResult <- if (accumRes.flatten.nonEmpty) {
           Task.fail(
@@ -166,7 +156,7 @@ object ReqResp {
 
   import zio.blocking._
 
-  lazy val routeDicts: (HttpRequest, Ref[Cache], DbConfig, Future[String]) => ZIO[ZEnv with Wslogger, Throwable, HttpResponse] =
+  lazy val routeDicts: (HttpRequest, Ref[Cache], DbConfig, Future[String]) => ZIO[ZEnvLog, Throwable, HttpResponse] =
     (request, cache, configuredDbList, reqEntity) =>
       for {
         _ <- logRequest(request)
@@ -174,7 +164,7 @@ object ReqResp {
         _ <- logReqData(reqRequestData)
         seqResDicts <- reqRequestData
         //check that all requested db are configures.
-        resString :ByteString <- dictDbsCheckInConfig(reqRequestData, configuredDbList)//.provideSomeM(env)
+        resString :ByteString <- dictDbsCheckInConfig(reqRequestData, configuredDbList)
           .foldM(
             checkErr => {
               val failJson =
@@ -230,7 +220,7 @@ object ReqResp {
     UIO.unit
 
   //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
-  val routeGetDebug: (HttpRequest) => ZIO[ZEnv with Wslogger, Throwable, HttpResponse] = request => for {
+  val routeGetDebug: (HttpRequest) => ZIO[ZEnvLog, Throwable, HttpResponse] = request => for {
     strDebugForm <- openFile(
       "C:\\ws_fphp\\src\\main\\resources\\debug_post.html"
       //"C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\debug_post.html"
@@ -249,7 +239,7 @@ object ReqResp {
   } yield f
 
 
-  val routeGetFavicon: HttpRequest => ZIO[ZEnv, Throwable, HttpResponse] = request => for {
+  val routeGetFavicon: HttpRequest => ZIO[ZEnvLog, Throwable, HttpResponse] = request => for {
     _ <- putStrLn(s"================= ${request.method} REQUEST ${request.protocol.value} =============")
     //icoFile <- Task{new File("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/favicon.png")}
     icoFile <- Task{new File("C:\\ws_fphp\\src\\main\\resources\\favicon.png")}
@@ -265,10 +255,10 @@ object ReqResp {
   } yield f
 
 
-  val route404: HttpRequest => ZIO[ZEnv with Wslogger, Throwable, HttpResponse] = request => for {
+  val route404: HttpRequest => ZIO[ZEnvLog, Throwable, HttpResponse] = request => for {
     _ <- logRequest(request)
     f <- ZIO.fromFuture { implicit ec =>
-      Future.successful(HttpResponse(404, entity = "Unknown resource!"))
+      Future.successful(HttpResponse(pnf, entity = "Unknown resource!"))
         .flatMap{
           result :HttpResponse => Future(result).map(_ => result)
         }

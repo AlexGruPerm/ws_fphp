@@ -1,10 +1,10 @@
 package application
 
 import confs.Configuration
-import envs.EnvContainer
-import modules.Wslogging.Wslogger
+import envs.EnvContainer.ZEnvLog
+import zio.logging._
 import zio.{Task, UIO, ZEnv, ZIO, ZLayer}
-import zio.logging.{LogLevel}
+import zio.logging.{LogLevel, Logging}
 import zio.console.putStrLn
 
 /**
@@ -23,17 +23,17 @@ object Main extends zio.App {
     }
   } yield checkRes
 
-  private def wsApp: List[String] => ZIO[ZEnv with Wslogger, Throwable, Unit] = args =>
+  private def wsApp: List[String] => ZIO[ZEnvLog, Throwable, Unit] = args =>
     for {
-      _ <- Wslogger.out(LogLevel.Info)("Web service starting")
+      _ <- logInfo("Web service starting")
       _ <- checkArgs(args)
       cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
       res <- WsServObj.WsServer(cfg)
-      _ <- Wslogger.out(LogLevel.Info)("Web service stopping")
+      _ <- logInfo("Web service stopping")
     } yield res
 
   override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] =
-    wsApp(args).provideCustomLayer(envs.EnvContainer.ZEnvLog)
+    wsApp(args).provideCustomLayer(envs.EnvContainer.ZEnvLogLayer)
       .foldM(throwable => putStrLn(s"Error: ${throwable.getMessage}") *>
             ZIO.foreach(throwable.getStackTrace) { sTraceRow =>
               putStrLn(s"$sTraceRow")
