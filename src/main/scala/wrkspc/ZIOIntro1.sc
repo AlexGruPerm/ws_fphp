@@ -25,7 +25,7 @@ object FirstExample extends App{
   def run(args :List[String]): ZIO[ZEnv,Nothing,Int] = {
     (for {
       _ <- putStrLn("1").lock(Executor.fromExecutionContext(3)(ectx1))
-      f <- blocking(ZIO.sleep(3.seconds).zipRight(IO.effect(println("2")))).fork
+      f <- blocking(ZIO.sleep(3.seconds).zipRight(IO.effect(println("2")))).forkDaemon//.fork
       _ <- effectBlocking(println("3"))
       _ <- f.join
     } yield 0

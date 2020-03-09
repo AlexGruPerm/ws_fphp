@@ -155,14 +155,14 @@ object WsServObj {
 
           _ <- logInfo(s"Before startRequestHandler. Cache created with $cacheInitialValue")
 
-          fiber <- startRequestHandler(cache, conf, actorSystem).disconnect.fork
+          fiber <- startRequestHandler(cache, conf, actorSystem).forkDaemon//.disconnect.fork
           _ <- fiber.join
 
           thisConnection = (new PgConnection(conf.dbListenConfig))
           cacheCheckerValidation <- cacheValidator(cache, conf.dbListenConfig, thisConnection)
 
-            .repeat(Schedule.spaced(3.second)).disconnect.fork *>
-            cacheChecker(cache).repeat(Schedule.spaced(4.second)).disconnect.fork
+            .repeat(Schedule.spaced(3.second)).forkDaemon/*.disconnect.fork*/ *>
+            cacheChecker(cache).repeat(Schedule.spaced(4.second)).forkDaemon//.disconnect.fork
           _ <- cacheCheckerValidation.join
           _ <- logInfo("After startRequestHandler, end of WsServer.")
         } yield ()
