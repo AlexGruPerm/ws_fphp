@@ -124,21 +124,6 @@ object WsServObj {
     } yield ()
 
 
-    /*
-        ZIO.foreach(pgsessLs.sess.getNotifications(3000))(nt =>
-          log(LogLevel.Debug)(s"Notification name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}").provideSomeM(env)
-        )
-*/
-      /*
-      cacheCurrentValue <- cache.get
-      _  <- zio.modules.modules.logging.logging.locallyAnnotate(correlationId,"cache_validator"){
-        log(LogLevel.Debug)(s"cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
-          s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
-      }.provideSomeM(env)
-      _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1))//todo: remove.
-      */
-
-
   /**
    * Read config file and open Http server.
    * Example :
@@ -160,10 +145,10 @@ object WsServObj {
 
           thisConnection = (new PgConnection(conf.dbListenConfig))
           cacheCheckerValidation <- cacheValidator(cache, conf.dbListenConfig, thisConnection)
-
-            .repeat(Schedule.spaced(3.second)).forkDaemon/*.disconnect.fork*/ *>
-            cacheChecker(cache).repeat(Schedule.spaced(4.second)).forkDaemon//.disconnect.fork
+            .repeat(Schedule.spaced(3.second)).forkDaemon *>
+            cacheChecker(cache).repeat(Schedule.spaced(4.second)).forkDaemon
           _ <- cacheCheckerValidation.join
+
           _ <- logInfo("After startRequestHandler, end of WsServer.")
         } yield ()
     )
@@ -207,6 +192,11 @@ object WsServObj {
   def reqHandlerM(dbConfigList: DbConfig, actorSystem: ActorSystem, cache: Ref[Cache])(request: HttpRequest):
   Future[HttpResponse] = {
     implicit val system: ActorSystem = actorSystem
+
+    import scala.concurrent.duration._
+    implicit val timeout: Timeout = Timeout(10 seconds)
+    implicit val executionContext: ExecutionContextExecutor = system.dispatcher
+
     import akka.http.scaladsl.unmarshalling.Unmarshal
     import ReqResp._
 
@@ -234,6 +224,7 @@ object WsServObj {
   }
 
   //todo: rc18 bug: https://github.com/zio/zio/issues/3013
+  //todo: @AlexGruPerm the fix will be in RC18-2, coming soon
 
 
 

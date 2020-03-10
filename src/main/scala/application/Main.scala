@@ -16,6 +16,7 @@ import zio.console.putStrLn
 
 object Main extends zio.App {
 
+
   private def checkArgs : List[String] => ZIO[ZEnv,Throwable,Unit] = args => for {
     checkRes <- if (args.length < 0) {
       Task.fail(new IllegalArgumentException("Need config file as parameter."))}
@@ -23,15 +24,17 @@ object Main extends zio.App {
     }
   } yield checkRes
 
+
   private def wsApp: List[String] => ZIO[ZEnvLog, Throwable, Unit] = args =>
     for {
       _ <- logInfo("Web service starting")
       _ <- checkArgs(args)
-      //cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
-      cfg <- Configuration.config.load("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/application.conf")
+      cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
+      //cfg <- Configuration.config.load("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/application.conf")
       res <- WsServObj.WsServer(cfg)
       _ <- logInfo("Web service stopping")
     } yield res
+
 
   override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] =
     wsApp(args).provideCustomLayer(envs.EnvContainer.ZEnvLogLayer)
@@ -43,27 +46,3 @@ object Main extends zio.App {
       )
 
 }
-
-
-
-
-
-
-
-
-  /*
-
-*/
-
-
-  /*
-.foldM(
-  throwable =>
-    log(LogLevel.Error)(s"Error: ${throwable.getMessage}") *>
-      URIO.foreach(throwable.getStackTrace) { sTraceRow =>
-        log(LogLevel.Error)(s"$sTraceRow")
-      } as 1,
-  _ =>  log(LogLevel.Info)(s"Success exit of application.") as 0
-)
-*/
-

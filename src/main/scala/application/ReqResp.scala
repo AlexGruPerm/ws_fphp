@@ -222,9 +222,9 @@ object ReqResp {
   //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
   val routeGetDebug: (HttpRequest) => ZIO[ZEnvLog, Throwable, HttpResponse] = request => for {
     strDebugForm <- openFile(
-      //"C:\\ws_fphp\\src\\main\\resources\\debug_post.html"
+      "C:\\ws_fphp\\src\\main\\resources\\debug_post.html"
       //"C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\debug_post.html"
-    "/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
+      //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
     ).bracket(closeFile) { file =>
       Task(file.getLines.mkString.replace("req_json_text", CollectJsons.reqJsonText_))
     }

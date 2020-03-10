@@ -6,7 +6,7 @@ scalaVersion := "2.12.8"
 
 lazy val Versions = new {
   val akka = "2.6.3"
-  val akkaHttp  = "10.1.11"
+  val akkaHttp  = "10.1.10"//"10.1.11"
   val circeVers = "0.12.3"
   val logbackVers = "1.2.3"
   val pgVers = "42.2.5"
