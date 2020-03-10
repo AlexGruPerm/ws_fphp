@@ -140,7 +140,7 @@ object WsServObj {
 
           _ <- logInfo(s"Before startRequestHandler. Cache created with $cacheInitialValue")
 
-          fiber <- startRequestHandler(cache, conf, actorSystem).forkDaemon//.disconnect.fork
+          fiber <- startRequestHandler(cache, conf, actorSystem).forkDaemon//.fork(SuperviseMode.Disown)//.forkDaemon//.disconnect.fork
           _ <- fiber.join
 
           thisConnection = (new PgConnection(conf.dbListenConfig))
