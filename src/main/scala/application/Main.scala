@@ -19,7 +19,7 @@ object Main extends App {
     for {
       _ <- logInfo("Web service starting")
       _ <- checkArgs(args)
-      cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
+      cfg <- Configuration.config.load("C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\application.conf")
       res <- WsServObj.WsServer(cfg)
       _ <- logInfo("Web service stopping!")
     } yield res
