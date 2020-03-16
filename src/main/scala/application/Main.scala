@@ -1,10 +1,10 @@
 package application
 
 import confs.Configuration
-import envs.EnvContainer
 import modules.Wslogging.Wslogger
-import zio.{Task, UIO, ZEnv, ZIO, ZLayer}
-import zio.logging.{LogLevel}
+import zio.{Task, UIO, ZEnv, ZIO}
+import zio.logging.LogLevel
+import zio.logging._
 import zio.console.putStrLn
 
 /**
@@ -16,6 +16,8 @@ import zio.console.putStrLn
 
 object Main extends zio.App {
 
+  //val logFormat = "[correlation-id = %s] %s"
+
   private def checkArgs : List[String] => ZIO[ZEnv,Throwable,Unit] = args => for {
     checkRes <- if (args.length < 0) {
       Task.fail(new IllegalArgumentException("Need config file as parameter."))}
@@ -25,11 +27,11 @@ object Main extends zio.App {
 
   private def wsApp: List[String] => ZIO[ZEnv with Wslogger, Throwable, Unit] = args =>
     for {
-      _ <- Wslogger.out(LogLevel.Info)("Web service starting")
+      _ <- Wslogger.ZLayerLogger.map(_.get.log) >>> log(LogLevel.Info)("xcxc") // >>> log(LogLevel.Info)("Web service starting")
       _ <- checkArgs(args)
       cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
       res <- WsServObj.WsServer(cfg)
-      _ <- Wslogger.out(LogLevel.Info)("Web service stopping")
+      //_ <- Wslogger.out(LogLevel.Info)("Web service stopping")
     } yield res
 
   override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] =

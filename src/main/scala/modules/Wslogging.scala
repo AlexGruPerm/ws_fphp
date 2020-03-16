@@ -2,7 +2,7 @@ package modules
 
 import zio.logging.slf4j.Slf4jLogger
 import zio.logging.{LogAnnotation, LogLevel, Logging}
-import zio.{Has, UIO, ZIO, ZLayer}
+import zio.{Has, Task, ZIO, ZLayer}
 
 package object Wslogging {
 
@@ -10,7 +10,7 @@ package object Wslogging {
 
   object Wslogger{
     trait Service {
-      def log: UIO[Logging]
+      def log:  ZLayer[Any,Nothing,Logging]
     }
 
     val ZLayerLogger: ZLayer.NoDeps[Nothing, Wslogger] = ZLayer.succeed(
@@ -22,15 +22,18 @@ package object Wslogging {
           combine = (_, newValue) => newValue,
           render = identity
         )
-        def log: UIO[Logging] =  Slf4jLogger.make((context, message) => logFormat.format(context.get(correlationId), message))
+        //0.2.2. def log: UIO[Logging] =  Slf4jLogger.make((context, message) => logFormat.format(context.get(correlationId), message))
+        //0.2.3
+        def log: ZLayer[Any,Nothing,Logging] =
+          Slf4jLogger.make((context, message) => logFormat.format(context.get(correlationId), message))
       }
     )
 
-    def out(logLevel :LogLevel)(s :String): ZIO[Wslogger, Nothing, Unit] =
-      for {
-        thisLogger <- ZIO.accessM[Wslogger](_.get.log)
-        _ <- thisLogger.logger.log(logLevel)(s)
-      } yield ()
+    val live  = ZIO.access[Wslogger](_.get.log)
+  //  def out(logLevel :LogLevel)(s :String):  ZLayer[Any,Nothing,Logging] =
+  //    for {
+  //      thisLogger <- ZIO.accessM[Wslogger](_.get.log)
+  //    } yield thisLogger
 
   }
 }
