@@ -1,25 +1,21 @@
 package dbconn
 
-import java.io.IOException
 import java.sql.Types
-import java.util
 import java.util.concurrent.TimeUnit
 import java.util.NoSuchElementException
 
-import akka.util.ByteString
 import confs.DbConfig
-import data.{Cache, CacheEntity, DictDataRows, DictRow}
-import envs.EnvContainer.ZEnvLog
+import data.{ CacheEntity, DictDataRows, DictRow}
+import envs.CacheZLayerObject.CacheManager
+import envs.EnvContainer.{ZEnvLogCache}
 import io.circe.Printer
 import org.postgresql.jdbc.PgResultSet
 import io.circe.generic.auto._
 import io.circe.syntax._
 import org.postgresql.util.PSQLException
 import reqdata.Dict
-import zio.clock.Clock
-import zio.console.putStrLn
-import zio.logging.{LogLevel, Logging, log, logInfo}
-import zio.{IO, RIO, Ref, Task, UIO, ZEnv, ZIO, clock}
+import zio.logging.{logInfo}
+import zio.{IO, Task, ZIO, clock}
 
 
 //  loggetDict <- ZIO.access[Logging](_.logger)
@@ -60,28 +56,29 @@ object DbExecutor {
   }
 
 
-  private def getValueFromCache(hashKey: Int, cache: Ref[Cache]) = // :ZIO[ZEnv,NoSuchElementException,DictDataRows] =
+/*  private def getValueFromCache(hashKey: Int, cache: Ref[Cache]) = // :ZIO[ZEnv,NoSuchElementException,DictDataRows] =
     cache.get.flatMap(dsCache =>
       IO.effect(dsCache.dictsMap.get(hashKey).map(ce => ce.dictDataRows).get))
-      .refineToOrDie[NoSuchElementException]
+      .refineToOrDie[NoSuchElementException]*/
 
 
-  private def updateValueInCache(hashKey: Int, cache: Ref[Cache], ds: Task[DictDataRows],
+/*  private def updateValueInCache(hashKey: Int, cache: Ref[Cache], ds: Task[DictDataRows],
                                  reftables: Option[Seq[String]]): Task[Unit] =
     for {
     dictRows <- ds
     _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1,
       dictsMap = cv.dictsMap + (hashKey -> CacheEntity(System.currentTimeMillis,dictRows, reftables.getOrElse(Seq()))))
     )
-  } yield UIO.succeed(())
+  } yield UIO.succeed(())*/
+
+
 
   import zio.blocking._
-
-  private def getDictFromCursor: (DbConfig, Dict, Ref[Cache]) => ZIO[ZEnv, Throwable, DictDataRows] =
-    (configuredDb, trqDict, cache) =>
+  private def getDictFromCursor: (DbConfig, Dict) => ZIO[ZEnvLogCache, Throwable, DictDataRows] =
+    (configuredDb, trqDict) =>
       for {
         thisConfig <-
-          if (configuredDb.name==trqDict.db) {
+          if (configuredDb.name == trqDict.db) {
             Task(configuredDb)
           }
           else {
@@ -103,7 +100,10 @@ object DbExecutor {
         //todo: try pass it direct (new PgConnection).sess(thisConfig)
         dsCursor = getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration)
         hashKey :Int = trqDict.hashCode() //todo: add user_session
-        _ <- updateValueInCache(hashKey, cache, dsCursor, trqDict.reftables)
+        cache <- ZIO.access[CacheManager](_.get)
+        dictRows <- dsCursor
+        _ <- cache.set(hashKey, CacheEntity(System.currentTimeMillis, dictRows, trqDict.reftables.getOrElse(Seq())))
+        //updateValueInCache(hashKey, cache, dsCursor, trqDict.reftables)
         ds <- dsCursor
         //we absolutely need close it to return to the pool
         _ = thisConnection.sess.close()
@@ -111,18 +111,21 @@ object DbExecutor {
       } yield ds
 
 
-  val getDict: (DbConfig, Dict, Ref[Cache]) => ZIO[ZEnvLog, Throwable, DictDataRows] =
-    (configuredDb, trqDict, cache) =>
+  val getDict: (DbConfig, Dict) => ZIO[ZEnvLogCache, Throwable, DictDataRows] =
+    (configuredDb, trqDict) =>
       (for {
-        valFromCache <- getValueFromCache(trqDict.hashCode(), cache)
-        _ <- logInfo(s">>>>>> value found in cache ${valFromCache.name} for hashKey=${trqDict.hashCode()}")
-      } yield valFromCache).foldM(
+        cache <- ZIO.access[CacheManager](_.get)
+        valFromCache <- cache.get(trqDict.hashCode())//getValueFromCache(trqDict.hashCode(), cache)
+        _ <- logInfo(s">>>>>> value found in cache ${valFromCache.get} for hashKey=${trqDict.hashCode()}")
+      } yield valFromCache.get.dictDataRows).foldM(
          _ => for {
-          db <- getDictFromCursor(configuredDb, trqDict, cache)
+          db <- getDictFromCursor(configuredDb, trqDict)
           _ <- logInfo(s"<<<<<< value get from db ${db.name}")
-           _ <- updateValueInCache(trqDict.hashCode(),cache,Task(db),trqDict.reftables)
+           //_ <- updateValueInCache(trqDict.hashCode(),cache,Task(db),trqDict.reftables)
+          cache <- ZIO.access[CacheManager](_.get)
+           _ <- cache.set(trqDict.hashCode(), CacheEntity(System.currentTimeMillis, db, trqDict.reftables.getOrElse(Seq())))
          } yield db,
-        v  => Task(v)
+        v  => ZIO.succeed(v)
   )
 
 

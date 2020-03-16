@@ -13,8 +13,9 @@ import application.WsServObj.CommonTypes.IncConnSrvBind
 import confs.{Config, DbConfig}
 import data.{Cache, CacheEntity, DictDataRows}
 import dbconn.{PgConnection, pgSess, pgSessListen}
+import envs.CacheZLayerObject.CacheManager
 import envs.EnvContainer
-import envs.EnvContainer.ZEnvLog
+import envs.EnvContainer.{ZEnvLog, ZEnvLogCache}
 import org.postgresql.PGNotification
 import zio.logging.{LogLevel, Logging, log, logInfo, logTrace}
 import zio.{Runtime, _}
@@ -26,17 +27,32 @@ import scala.language.postfixOps
 //ex of using Ref for cache. https://stackoverflow.com/questions/57252919/scala-zio-ref-datatype
 object WsServObj {
 
-  private val notifTimeout: Int = 3000
+  //private val notifTimeout: Int = 3000 if listener connection is locked or not response
 
   /**
    *
    */
-  private val cacheChecker: (Ref[Cache]) => ZIO[ZEnvLog, Nothing, Unit] = (cache) =>
+  private val cacheChecker: ZIO[ZEnvLogCache, Nothing, Unit] =
     for {
-      cacheCurrentValue <- cache.get
+      cache <- ZIO.access[CacheManager](_.get)
+      cacheCurrentValue <- cache.getCacheValue
       _ <- logInfo(s"cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
         s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
-      _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1)) //todo: remove.
+      _ <- cache.addHeartbeat
+    } yield ()
+
+  /**
+   * Search Entity in Cache by tablename in  and remove it
+   */
+  private val removeFromCacheByRefTable: String => ZIO[ZEnvLogCache, Throwable, Unit] = tableName =>
+    for {
+      _ <- logInfo(s"DB Listener PID = ")
+      cache <- ZIO.access[CacheManager](_.get)
+      cv <- cache.getCacheValue
+      _ <- logInfo(s"All keys = ${cv.dictsMap.keySet}")
+      foundKeys: Seq[Int] = hashKeysForRemove(cv.dictsMap, tableName)
+      _ <- logInfo(s"keys for removing from cache $foundKeys")
+      _ <- cache.remove(foundKeys)
     } yield ()
 
   /**
@@ -56,7 +72,7 @@ object WsServObj {
    *
    */
 
-  private val cacheValidator: (Ref[Cache], DbConfig, PgConnection) => ZIO[ZEnvLog, Throwable, Unit] = (cache, conf, pgsessSrc) => {
+  private val cacheValidator: (DbConfig, PgConnection) => ZIO[ZEnvLogCache, Throwable, Unit] = (conf, pgsessSrc) => {
     import zio.duration._
     for {
       pgsessLs <- pgsessSrc.sess orElse
@@ -65,30 +81,22 @@ object WsServObj {
       _ <- logInfo(s"DB Listener PID = ${pgsessLs.pid}")
       notifications = scala.Option(pgsessLs.sess.getNotifications).getOrElse(Array[PGNotification]()) //timeout
 
-      _ <- //Wslogger.out(LogLevel.Info)(s"notifications size = ${notifications.size}")
-        (if (notifications.size != 0) {
-          logInfo(s"notifications size = ${notifications.size}")
-        } else {
-          logInfo(s"notifications size = 0")
-        })
+      _ <- if (notifications.nonEmpty) {
+        logInfo(s"notifications size = ${notifications.size}")
+      } else {
+        logInfo(s"notifications size = 0")
+      }
 
-    _ <- (
-      ZIO.foreach(notifications) { nt =>
+    _ <- ZIO.foreach(notifications) { nt =>
         if (nt.getName == "change") {
           for {
-            //_ <- log(LogLevel.Debug)(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
             _ <- logInfo(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
-            //
-            // todo: here we need search all hashKeys where exists reference on table nt.getParameter.
-            //       and use it to clear cache entities.
-            //
-            _ <- removeFromCacheByRefTable(cache, nt.getParameter)
+            _ <- removeFromCacheByRefTable(nt.getParameter)
           } yield UIO.succeed(())
         } else {
           UIO.succeed(())
         }
-      }
-      ).catchAllCause {
+      }.catchAllCause {
       e => logInfo(s" cacheValidator Exception $e")
     }
 
@@ -101,27 +109,7 @@ object WsServObj {
   private def hashKeysForRemove(dictsMape: Map[Int, CacheEntity], tableName: String) :Seq[Int] =
     dictsMape.mapValues(v => v.reftables.contains(tableName)).withFilter(_._2).map(_._1).toSeq
 
-  /**
-   * Search Entity in Cache by tablename in  and remove it
-  */
-  private val removeFromCacheByRefTable: (Ref[Cache], String) => ZIO[ZEnvLog,Throwable,Unit] = (cache, tableName) =>
-    //for {
-      //_ <- zio.logging.locallyAnnotate(correlationId, "cache_entity_remover") {
-        for {
-          //_ <- log(LogLevel.Debug)(s"DB Listener PID = ")
-          _ <- logInfo(s"DB Listener PID = ")
-          cv <- cache.get
-          _ <- logInfo(s"All keys = ${cv.dictsMap.keySet}")
-          //_ <- log(LogLevel.Debug)(s"All keys = ${cv.dictsMap.keySet}")
-          //produce new Map with mapValues where values are Boolean, filter it by true and get only keys.
-          foundKeys :Seq[Int] = hashKeysForRemove( cv.dictsMap,tableName)
-          _ <- logInfo(s"keys for removing from cache $foundKeys")
-          //_ <- log(LogLevel.Debug)(s"keys for removing from cache $foundKeys")
-          _ <- cache.update(cvu => cvu.copy(HeartbeatCounter = cvu.HeartbeatCounter + 1,
-            dictsMap = cvu.dictsMap -- foundKeys))
-     //   } yield ()
-      //}.provideSomeM(env)
-    } yield ()
+
 
 
   /**
@@ -130,23 +118,21 @@ object WsServObj {
    * https://medium.com/@ghostdogpr/combining-zio-and-akka-to-enable-distributed-fp-in-scala-61ffb81e3283
    *
    */
-  val WsServer: Config => ZIO[ZEnvLog, Throwable, Unit] = conf => {
+  val WsServer: Config => ZIO[ZEnvLogCache, Throwable, Unit] = conf => {
     import zio.duration._
     val wsRes = Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
         for {
-          cache <- Ref.make(Cache(0, Map(1 -> CacheEntity(DictDataRows("empty", 0L, 0L, 0L, List(List())),Seq()))))
-          cacheInitialValue <- cache.get
-
+          cache <- ZIO.access[CacheManager](_.get)
+          cacheInitialValue <- cache.get(1)
           _ <- logInfo(s"Before startRequestHandler. Cache created with $cacheInitialValue")
-
-          fiber <- startRequestHandler(cache, conf, actorSystem).forkDaemon//.fork(SuperviseMode.Disown)//.forkDaemon//.disconnect.fork
+          fiber <- startRequestHandler(conf, actorSystem).forkDaemon//.fork(SuperviseMode.Disown)//.forkDaemon//.disconnect.fork
           _ <- fiber.join
 
-          thisConnection = (new PgConnection(conf.dbListenConfig))
-          cacheCheckerValidation <- cacheValidator(cache, conf.dbListenConfig, thisConnection)
+          thisConnection = PgConnection(conf.dbListenConfig)
+          cacheCheckerValidation <- cacheValidator(conf.dbListenConfig, thisConnection)
             .repeat(Schedule.spaced(3.second)).forkDaemon *>
-            cacheChecker(cache).repeat(Schedule.spaced(4.second)).forkDaemon
+            cacheChecker.repeat(Schedule.spaced(4.second)).forkDaemon
           _ <- cacheCheckerValidation.join
 
           _ <- logInfo("After startRequestHandler, end of WsServer.")
@@ -181,51 +167,41 @@ object WsServObj {
       ss <- Task(Http(actorSystem).bind(interface = conf.api.endpoint, port = conf.api.port))
     } yield ss
 
-  //implicit val ec: ExecutionContextExecutor = system.dispatcher //todo: remove
-  //implicit val fixedTpEc = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(1))
-  //Runtime.default.unsafeRunToFuture(responseFuture.provideLayer(EnvContainer.ZEnvLog).lock(zio.internal.Executor.fromExecutionContext(1)(fixedTpEc)))
-  //Runtime.default.unsafeRunToFuture(responseFuture.provideLayer(EnvContainer.ZEnvLog).lock(zio.internal.Executor.fromExecutionContext(10)(ec)))
 
   /**
    * dbConfigList are registered list of databases from config file - application.conf
   */
-  def reqHandlerM(dbConfigList: DbConfig, actorSystem: ActorSystem, cache: Ref[Cache])(request: HttpRequest):
-  Future[HttpResponse] = {
+  def reqHandlerM(dbConfigList: DbConfig, actorSystem: ActorSystem)(request: HttpRequest):
+    ZIO[ZEnvLogCache, Throwable, HttpResponse] =
+  {
     implicit val system: ActorSystem = actorSystem
-
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
     implicit val executionContext: ExecutionContextExecutor = system.dispatcher
-
     import akka.http.scaladsl.unmarshalling.Unmarshal
     import ReqResp._
 
-    lazy val responseFuture: ZIO[ZEnvLog, Throwable, HttpResponse] = request
+  for {
+    //lazy val responseFuture: ZIO[ZEnvLog, Throwable, HttpResponse] = request
+  responseFuture: HttpResponse <- request
     match {
-      case request@HttpRequest(HttpMethods.POST, Uri.Path("/dicts"), _, _, _) => {
+      case request@HttpRequest(HttpMethods.POST, Uri.Path("/dicts"), _, _, _) =>
         val reqEntityString: Future[String] = Unmarshal(request.entity).to[String]
-        routeDicts(request, cache, dbConfigList, reqEntityString)
-      }
+        routeDicts(request, dbConfigList, reqEntityString)
       case request@HttpRequest(HttpMethods.GET, _, _, _, _) =>
         request match {
           case request@HttpRequest(_, Uri.Path("/debug"), _, _, _) => routeGetDebug(request)
           case request@HttpRequest(_, Uri.Path("/favicon.ico"), _, _, _) => routeGetFavicon(request)
         }
-      case request: HttpRequest => {
+      case request: HttpRequest =>
         request.discardEntityBytes()
         route404(request)
-      }
     }
-
-    Runtime.default.unsafeRunToFuture(
-      responseFuture.provideLayer(zio.ZEnv.live >>> envs.EnvContainer.ZEnvLogLayer)
-    )
+    //resFut <- Task(responseFuture)
+    //Runtime.default.unsafeRunToFuture(Task(responseFuture).provideLayer(zio.ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer))
+  } yield responseFuture
 
   }
-
-  //todo: rc18 bug: https://github.com/zio/zio/issues/3013
-  //todo: @AlexGruPerm the fix will be in RC18-2, coming soon
-
 
 
   /**
@@ -237,8 +213,8 @@ object WsServObj {
    * (handler: HttpRequest => Future[HttpResponse])
    *
    */
-  val startRequestHandler: (Ref[Cache], Config, ActorSystem) => ZIO[ZEnvLog, Throwable, Future[Done]] =
-    (cache, conf, actorSystem) => {
+  val startRequestHandler: (Config, ActorSystem) => ZIO[ZEnvLogCache, Throwable, Future[Done]] =
+    (conf, actorSystem) => {
     implicit val system: ActorSystem = actorSystem
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(120 seconds)
@@ -248,16 +224,24 @@ object WsServObj {
         ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(conf,actorSystem)
         _ <- logInfo("ServerSource created")
 
+        //cache <- ZIO.access[CacheManager](_.get)
+
         // Curried version of reqHandlerM has type HttpRequest => Future[HttpResponse]
-        reqHandlerFinal <- Task(reqHandlerM(conf.dbConfig, actorSystem, cache) _)
+        reqHandlerFinal = reqHandlerM(conf.dbConfig, actorSystem) _
+
+   /*     reqHandlerFinal <- Task(Runtime.default.unsafeRunToFuture(
+          reqHandlerFinalSrc//.provideLayer(zio.ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer)
+          ))*/
+
         requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] =
         ZIO.fromFunction((r: HttpRequest) =>  reqHandlerFinal(r))
+
         serverWithReqHandler: RIO[IncConnSrvBind, Future[Done]] =
         ZIO.fromFunction((srv: IncConnSrvBind) =>
           srv.runForeach {
             conn =>
               conn.handleWithAsyncHandler(
-                r => Runtime.default.unsafeRun(requestHandlerFunc.provide(r))
+                r => Runtime.default.unsafeRunToFuture(requestHandlerFunc.provide(r))
               )
           }
         )

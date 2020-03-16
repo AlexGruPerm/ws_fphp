@@ -18,7 +18,8 @@ import akka.util.ByteString
 import confs.{Config, DbConfig}
 import data.{Cache, CacheEntity, DbErrorDesc, DictDataRows, DictRow, DictsDataAccum, RequestResult}
 import dbconn.{DbExecutor, PgConnection}
-import envs.EnvContainer.ZEnvLog
+import envs.CacheZLayerObject.CacheManager
+import envs.EnvContainer.{ZEnvLog, ZEnvLogCache}
 import io.circe.generic.JsonCodec
 import io.circe.parser.parse
 import io.circe.{Decoder, Encoder, Json, Printer}
@@ -156,9 +157,10 @@ object ReqResp {
 
   import zio.blocking._
 
-  lazy val routeDicts: (HttpRequest, Ref[Cache], DbConfig, Future[String]) => ZIO[ZEnvLog, Throwable, HttpResponse] =
-    (request, cache, configuredDbList, reqEntity) =>
+  lazy val routeDicts: (HttpRequest, DbConfig, Future[String]) => ZIO[ZEnvLogCache, Throwable, HttpResponse] =
+    (request, configuredDbList, reqEntity) =>
       for {
+        cache <- ZIO.access[CacheManager](_.get)
         _ <- logRequest(request)
         reqRequestData = parseRequestData(reqEntity)
         _ <- logReqData(reqRequestData)
@@ -177,10 +179,10 @@ object ReqResp {
                   thisDict =>
                     if (seqResDicts.thread_pool == "block") {
                       //run in separate blocking pool, "unlimited" thread count
-                      blocking(DbExecutor.getDict(configuredDbList, thisDict, cache))
+                      blocking(DbExecutor.getDict(configuredDbList, thisDict))
                     } else {
                       //run on sync pool, count of threads equal CPU.cores*2 (cycle)
-                      DbExecutor.getDict(configuredDbList, thisDict, cache)
+                      DbExecutor.getDict(configuredDbList, thisDict)
                     }
                 }.fold(
                   err => compress(seqResDicts.cont_encoding_gzip_enabled,

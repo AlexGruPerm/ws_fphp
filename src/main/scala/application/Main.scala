@@ -2,7 +2,7 @@ package application
 
 import zio.App
 import confs.Configuration
-import envs.EnvContainer.ZEnvLog
+import envs.EnvContainer.{ZEnvLog, ZEnvLogCache}
 import zio.logging._
 import zio.{Task, UIO, ZEnv, ZIO}
 import zio.console.putStrLn
@@ -15,7 +15,7 @@ object Main extends App {
     }
   } yield checkRes
 
-  private def wsApp: List[String] => ZIO[ZEnvLog, Throwable, Unit] = args =>
+  private def wsApp: List[String] => ZIO[ZEnvLogCache, Throwable, Unit] = args =>
     for {
       _ <- logInfo("Web service starting")
       _ <- checkArgs(args)
@@ -25,7 +25,7 @@ object Main extends App {
     } yield res
 
   override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] =
-    wsApp(args).provideCustomLayer(envs.EnvContainer.ZEnvLogLayer)
+    wsApp(args).provideCustomLayer(envs.EnvContainer.ZEnvLogCacheLayer)
       .foldM(throwable => putStrLn(s"Error: ${throwable.getMessage}") *>
             ZIO.foreach(throwable.getStackTrace) { sTraceRow =>
               putStrLn(s"$sTraceRow")

@@ -59,3 +59,33 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_ch_listener_notify
     AFTER INSERT OR UPDATE OR DELETE ON listener_notify
     FOR EACH ROW EXECUTE PROCEDURE notify_change();
+
+
+create TRIGGER trg_sl_d_okfs
+AFTER INSERT OR UPDATE OR DELETE ON sl_d_okfs
+FOR EACH statement EXECUTE PROCEDURE notify_change();
+
+select * from sl_d_okfs
+
+update sl_d_okfs set order_by=1 where dimension_key=19270;
+commit;
+
+
+select pid as process_id,
+       usename as username,
+       datname as database_name,
+       client_addr as client_address,
+       application_name,
+       backend_start,
+       state,
+       state_change,
+       wait_event,
+       query
+from pg_stat_activity
+where coalesce(usename,'-') = 'prm_salary'
+  and application_name like 'wsfphp%'
+ order by application_name
+
+
+SELECT pg_terminate_backend(9236);
+commit;
