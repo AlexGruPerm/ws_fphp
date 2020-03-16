@@ -39,28 +39,26 @@ import zio.Task
  *  Singleton object that keep db connection.
 */
 //todo: what if make it object ???
-class PgConnection  {
+case class PgConnection(dbconf : DbConfig){
 
   println("Constructor PgConnection")
+  private val c :Connection = DriverManager.getConnection(dbconf.urlWithDb, dbconf.getJdbcProperties)
+  c.setClientInfo("ApplicationName",s"wsfphp_notif_listener")
+  c.setAutoCommit(true)
+  private val pgconn = c.asInstanceOf[PGConnection]
+  private val stmt: Statement = c.createStatement
+  private val rs: ResultSet = stmt.executeQuery("SELECT pg_backend_pid() as pg_backend_pid")
+  rs.next()
+  private val pg_backend_pid :Int = rs.getInt("pg_backend_pid")
+  rs.close()
+  stmt.close()
+
+  //good example: http://www.smartjava.org/content/listen-notifications-postgresql-scala/
+  private val stmtListen = c.createStatement
+  stmtListen.execute("LISTEN change")
 
   //todo: read PgConnectProp properties single time from input json.
-  val sess : DbConfig => Task[pgSessListen] = (dbconf) =>
-    Task {
-      val c :Connection = DriverManager.getConnection(dbconf.urlWithDb, dbconf.getJdbcProperties)
-      c.setClientInfo("ApplicationName",s"wsfphp_notif_listener")
-      c.setAutoCommit(true)
-      val pgconn = c.asInstanceOf[PGConnection]
-      val stmt: Statement = c.createStatement
-      val rs: ResultSet = stmt.executeQuery("SELECT pg_backend_pid() as pg_backend_pid")
-      rs.next()
-      val pg_backend_pid :Int = rs.getInt("pg_backend_pid")
-      rs.close()
-      stmt.close()
-
-      //good example: http://www.smartjava.org/content/listen-notifications-postgresql-scala/
-      val stmtListen = c.createStatement
-      stmtListen.execute("LISTEN change")
-      //stmtListen.close() // make sure connection isn't closed when executing queries
+  def sess : Task[pgSessListen] = Task {
       pgSessListen(c,pgconn,pg_backend_pid)
     }.refineToOrDie[PSQLException]
 
