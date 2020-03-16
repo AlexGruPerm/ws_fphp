@@ -21,7 +21,7 @@ object Main extends App {
       _ <- checkArgs(args)
       cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
       res <- WsServObj.WsServer(cfg)
-      _ <- logInfo("Web service stopping")
+      _ <- logInfo("Web service stopping!")
     } yield res
 
   override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] =
