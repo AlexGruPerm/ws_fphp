@@ -161,6 +161,8 @@ object ReqResp {
     (request, configuredDbList, reqEntity) =>
       for {
         cache <- ZIO.access[CacheManager](_.get)
+        cacheCurrentValue <- cache.getCacheValue
+        _ <- logInfo(s"CONTROL hb = ${cacheCurrentValue.HeartbeatCounter}")
         _ <- logRequest(request)
         reqRequestData = parseRequestData(reqEntity)
         _ <- logReqData(reqRequestData)
