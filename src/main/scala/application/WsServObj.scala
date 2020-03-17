@@ -172,34 +172,36 @@ object WsServObj {
    * dbConfigList are registered list of databases from config file - application.conf
   */
   def reqHandlerM(dbConfigList: DbConfig, actorSystem: ActorSystem)(request: HttpRequest):
-    ZIO[ZEnvLogCache, Throwable, HttpResponse] =
-  {
+  Future[HttpResponse] = {
     implicit val system: ActorSystem = actorSystem
+
     import scala.concurrent.duration._
     implicit val timeout: Timeout = Timeout(10 seconds)
     implicit val executionContext: ExecutionContextExecutor = system.dispatcher
+
     import akka.http.scaladsl.unmarshalling.Unmarshal
     import ReqResp._
 
-  for {
-    //lazy val responseFuture: ZIO[ZEnvLog, Throwable, HttpResponse] = request
-  responseFuture: HttpResponse <- request
+    lazy val responseFuture: ZIO[ZEnvLogCache, Throwable, HttpResponse] = request
     match {
-      case request@HttpRequest(HttpMethods.POST, Uri.Path("/dicts"), _, _, _) =>
+      case request@HttpRequest(HttpMethods.POST, Uri.Path("/dicts"), _, _, _) => {
         val reqEntityString: Future[String] = Unmarshal(request.entity).to[String]
         routeDicts(request, dbConfigList, reqEntityString)
+      }
       case request@HttpRequest(HttpMethods.GET, _, _, _, _) =>
         request match {
           case request@HttpRequest(_, Uri.Path("/debug"), _, _, _) => routeGetDebug(request)
           case request@HttpRequest(_, Uri.Path("/favicon.ico"), _, _, _) => routeGetFavicon(request)
         }
-      case request: HttpRequest =>
+      case request: HttpRequest => {
         request.discardEntityBytes()
         route404(request)
+      }
     }
-    //resFut <- Task(responseFuture)
-    //Runtime.default.unsafeRunToFuture(Task(responseFuture).provideLayer(zio.ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer))
-  } yield responseFuture
+
+    Runtime.default.unsafeRunToFuture(
+      responseFuture.provideLayer(envs.EnvContainer.ZEnvLogCacheLayer)
+    )
 
   }
 
@@ -214,40 +216,32 @@ object WsServObj {
    *
    */
   val startRequestHandler: (Config, ActorSystem) => ZIO[ZEnvLogCache, Throwable, Future[Done]] =
-    (conf, actorSystem) => {
-    implicit val system: ActorSystem = actorSystem
-    import scala.concurrent.duration._
-    implicit val timeout: Timeout = Timeout(120 seconds)
-    implicit val executionContext: ExecutionContextExecutor = system.dispatcher
-    import akka.stream.scaladsl.Source
+    ( conf, actorSystem) => {
+      implicit val system: ActorSystem = actorSystem
+      import scala.concurrent.duration._
+      implicit val timeout: Timeout = Timeout(120 seconds)
+      implicit val executionContext: ExecutionContextExecutor = system.dispatcher
+      import akka.stream.scaladsl.Source
       for {
         ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(conf,actorSystem)
         _ <- logInfo("ServerSource created")
-
-        //cache <- ZIO.access[CacheManager](_.get)
-
+        cache <- ZIO.access[CacheManager](_.get)
         // Curried version of reqHandlerM has type HttpRequest => Future[HttpResponse]
-        reqHandlerFinal = reqHandlerM(conf.dbConfig, actorSystem) _
-
-   /*     reqHandlerFinal <- Task(Runtime.default.unsafeRunToFuture(
-          reqHandlerFinalSrc//.provideLayer(zio.ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer)
-          ))*/
-
+        reqHandlerFinal <- Task(reqHandlerM(conf.dbConfig, actorSystem) _)
         requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] =
         ZIO.fromFunction((r: HttpRequest) =>  reqHandlerFinal(r))
-
         serverWithReqHandler: RIO[IncConnSrvBind, Future[Done]] =
         ZIO.fromFunction((srv: IncConnSrvBind) =>
           srv.runForeach {
             conn =>
               conn.handleWithAsyncHandler(
-                r => Runtime.default.unsafeRunToFuture(requestHandlerFunc.provide(r))
+                r => Runtime.default.unsafeRun(requestHandlerFunc.provide(r))
               )
           }
         )
         sourceWithServer <- serverWithReqHandler.provide(ss)
       } yield sourceWithServer
-  }
+    }
 
 
 }

@@ -113,21 +113,50 @@ object DbExecutor {
 
   val getDict: (DbConfig, Dict) => ZIO[ZEnvLogCache, Throwable, DictDataRows] =
     (configuredDb, trqDict) =>
-      (for {
+      for {
         cache <- ZIO.access[CacheManager](_.get)
-        valFromCache <- cache.get(trqDict.hashCode())//getValueFromCache(trqDict.hashCode(), cache)
-        _ <- logInfo(s">>>>>> value found in cache ${valFromCache.get} for hashKey=${trqDict.hashCode()}")
-      } yield valFromCache.get.dictDataRows).foldM(
-         _ => for {
-          db <- getDictFromCursor(configuredDb, trqDict)
-          _ <- logInfo(s"<<<<<< value get from db ${db.name}")
-           //_ <- updateValueInCache(trqDict.hashCode(),cache,Task(db),trqDict.reftables)
-          cache <- ZIO.access[CacheManager](_.get)
-           _ <- cache.set(trqDict.hashCode(), CacheEntity(System.currentTimeMillis, db, trqDict.reftables.getOrElse(Seq())))
-         } yield db,
-        v  => ZIO.succeed(v)
-  )
+        valFromCache: Option[CacheEntity] <- cache.get(trqDict.hashCode())
+        dictRows <- valFromCache match {
+          case Some(s :CacheEntity) => ZIO.succeed(s.dictDataRows)
+          case None => for {
+            db <- getDictFromCursor(configuredDb, trqDict)
+            _ <- logInfo(s"<<<<<< value get from db ${db.name}")
+            cache <- ZIO.access[CacheManager](_.get)
+            _ <- logInfo(s"set value in cache ${trqDict.hashCode()} ")
+            _ <- cache.set(trqDict.hashCode(), CacheEntity(System.currentTimeMillis, db, trqDict.reftables.getOrElse(Seq())))
+          } yield db
+        }
+      } yield dictRows
 
+//  for {
+//    cache <- ZIO.access[CacheManager](_.get)
+//    valFromCache: CacheEntity <- cache.get(trqDict.hashCode()).foldM(
+//      _ => for {
+//        db <- getDictFromCursor(configuredDb, trqDict)
+//        _ <- logInfo(s"<<<<<< value get from db ${db.name}")
+//        cache <- ZIO.access[CacheManager](_.get)
+//        _ <- cache.set(trqDict.hashCode(), CacheEntity(System.currentTimeMillis, db, trqDict.reftables.getOrElse(Seq())))
+//      } yield db,
+//      data => ZIO.succeed(data.get.dictDataRows))
+//  } yield valFromCache
+
+
+  //  val getDict: (DbConfig, Dict) => ZIO[ZEnvLogCache, Throwable, DictDataRows] =
+//    (configuredDb, trqDict) =>
+//      (for {
+//        cache <- ZIO.access[CacheManager](_.get)
+//        valFromCache <- cache.get(trqDict.hashCode())//getValueFromCache(trqDict.hashCode(), cache)
+//        _ <- logInfo(s">>>>>> value found in cache ${valFromCache.get} for hashKey=${trqDict.hashCode()}")
+//      } yield valFromCache.get.dictDataRows).foldM(
+//        _ => for {
+//          db <- getDictFromCursor(configuredDb, trqDict)
+//          _ <- logInfo(s"<<<<<< value get from db ${db.name}")
+//          //_ <- updateValueInCache(trqDict.hashCode(),cache,Task(db),trqDict.reftables)
+//          cache <- ZIO.access[CacheManager](_.get)
+//          _ <- cache.set(trqDict.hashCode(), CacheEntity(System.currentTimeMillis, db, trqDict.reftables.getOrElse(Seq())))
+//        } yield db,
+//        v  => ZIO.succeed(v)
+//      )
 
 }
 
