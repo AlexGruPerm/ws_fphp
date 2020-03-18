@@ -60,7 +60,7 @@ object ReqResp {
     _ <- logTrace("  ---------- HEADER ---------")
     _ <- URIO.foreach(request.headers.zipWithIndex)(hdr => logTrace(s"   #${hdr._2} : ${hdr._1.toString}"))
     _ <- logTrace(s"  ---------------------------")
-    _ <- logTrace(s"entity ${request.entity.toString} ")
+    //_ <- logTrace(s"entity ${request.entity.toString} ") todo: open ???
     _ <- logTrace("========================================================")
   } yield ()
 
@@ -162,10 +162,12 @@ object ReqResp {
       for {
         cache <- ZIO.access[CacheManager](_.get)
         cacheCurrentValue <- cache.getCacheValue
-        _ <- logInfo(s"CONTROL hb = ${cacheCurrentValue.HeartbeatCounter}")
-        _ <- logRequest(request)
+        _ <- logTrace(s"START routeDicts = ${cacheCurrentValue.HeartbeatCounter}")
+
+
+        //_ <- logRequest(request) todo: open it
         reqRequestData = parseRequestData(reqEntity)
-        _ <- logReqData(reqRequestData)
+        //_ <- logReqData(reqRequestData) todo: open it
         seqResDicts <- reqRequestData
         //check that all requested db are configures.
         resString :ByteString <- dictDbsCheckInConfig(reqRequestData, configuredDbList)

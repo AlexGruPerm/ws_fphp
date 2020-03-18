@@ -1,3 +1,4 @@
-Type mismatch
-Required:  zio.ZLayer[Any, Nothing , ZEnv  with CacheManager[Int]]
-Found:  zio.ZLayer[Any,E,ZEnv with CacheManager[Int]]
+    select   REGISTRYNUMBER,KBK,NUMBER_PBO,DATE_CONTR,VAL,DATE_BO
+    from     T_DETAILS_ANALYTICS_DV_81
+    where    HASH_KEY='123'
+    order by REGISTRYNUMBER nulls last

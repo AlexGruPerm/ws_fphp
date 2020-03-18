@@ -120,15 +120,20 @@ object WsServObj {
    * https://medium.com/@ghostdogpr/combining-zio-and-akka-to-enable-distributed-fp-in-scala-61ffb81e3283
    *
    */
+  import scala.concurrent.duration.Duration
   val WsServer: Config => ZIO[ZEnvLogCache, Throwable, Unit] = conf => {
     import zio.duration._
     val wsRes = Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
         for {
           cache <- ZIO.access[CacheManager](_.get)
-          cacheInitialValue <- cache.get(1)
-          _ <- logInfo(s"Before startRequestHandler. Cache created with $cacheInitialValue")
-          fiber <- startRequestHandler(conf, actorSystem).forkDaemon//.fork(SuperviseMode.Disown)//.forkDaemon//.disconnect.fork
+          //cacheInitialValue <- cache.get(1)
+          cv <- cache.getCacheValue
+          _ <- logInfo(s"Before startRequestHandler. Cache created ts  ${cv.cacheCreatedTs}")
+
+          _ <- ZIO.sleep(2.seconds)
+
+          fiber <- startRequestHandler(conf, actorSystem).forkDaemon
           _ <- fiber.join
 
           thisConnection = PgConnection(conf.dbListenConfig)
@@ -227,11 +232,12 @@ object WsServObj {
       for {
         ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(conf,actorSystem)
         _ <- logInfo("ServerSource created")
-        cache <- ZIO.access[CacheManager](_.get)
+        //cache <- ZIO.access[CacheManager](_.get)
         // Curried version of reqHandlerM has type HttpRequest => Future[HttpResponse]
         reqHandlerFinal <- Task(reqHandlerM(conf.dbConfig, actorSystem) _)
-        requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] =
-        ZIO.fromFunction((r: HttpRequest) =>  reqHandlerFinal(r))
+        requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] = ZIO.fromFunction(
+          (r: HttpRequest) =>  reqHandlerFinal(r))
+
         serverWithReqHandler: RIO[IncConnSrvBind, Future[Done]] =
         ZIO.fromFunction((srv: IncConnSrvBind) =>
           srv.runForeach {

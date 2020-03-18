@@ -2,7 +2,31 @@ package testsjsons
 
 object CollectJsons {
 
-   val reqJsonText_ =
+  val reqJsonText_ =
+    """
+      |              { "user_session" : "c4ec52189bd51acb95bc2a5082c7c014",
+      |                "cont_encoding_gzip_enabled" : 1,
+      |                 "thread_pool" : "block",
+      |                 "request_timeout_ms": 5000,
+      |                 "cache_live_time" : 60000,
+      |                "dicts": [
+      |                  {
+      |                    "name" : "oiv",
+      |                    "db" : "dbp",
+      |                    "proc" : "prm_salary.pkg_web_cons_rep_grbs_list(refcur => ?, p_user_id => 45224506)",
+      |                    "reftables" : ["sl_user_access","sl_d_grbs","sl_f_cons_rep","sl_inst_grbs_link","sl_institution" ]
+      |                  },
+      |                 {
+      |                  "name" : "okfs",
+      |                  "db" : "dbp",
+      |                  "proc":"prm_salary.pkg_web_cons_rep_okfs_list(refcur => ?)",
+      |                  "reftables" : ["sl_d_okfs"]
+      |                }
+      |              ]
+      |             }
+      |""".stripMargin
+
+   val reqJsonText__ =
     """
       |              { "user_session" : "c4ec52189bd51acb95bc2a5082c7c014",
       |                "cont_encoding_gzip_enabled" : 1,
