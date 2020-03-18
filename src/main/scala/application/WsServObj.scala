@@ -79,14 +79,15 @@ object WsServObj {
       pgsessLs <- pgsessSrc.sess orElse
         PgConnection(conf).sess.retry(Schedule.recurs(3) && Schedule.spaced(2.seconds))
 
-      _ <- logInfo(s"DB Listener PID = ${pgsessLs.pid}")
+      //todo: open _ <- logInfo(s"DB Listener PID = ${pgsessLs.pid}")
       notifications = scala.Option(pgsessLs.sess.getNotifications).getOrElse(Array[PGNotification]()) //timeout
 
-      _ <- if (notifications.nonEmpty) {
-        logInfo(s"notifications size = ${notifications.size}")
-      } else {
-        logInfo(s"notifications size = 0")
-      }
+      //todo: open it
+//      _ <- if (notifications.nonEmpty) {
+//        logInfo(s"notifications size = ${notifications.size}")
+//      } else {
+//        logInfo(s"notifications size = 0")
+//      }
 
     _ <- ZIO.foreach(notifications) { nt =>
         if (nt.getName == "change") {
