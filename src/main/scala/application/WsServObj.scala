@@ -37,6 +37,7 @@ object WsServObj {
       cache <- ZIO.access[CacheManager](_.get)
       cacheCurrentValue <- cache.getCacheValue
       _ <- logInfo(s"cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
+        s" cacheBorn = ${cacheCurrentValue.cacheCreatedTs}" +
         s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
       _ <- cache.addHeartbeat
     } yield ()

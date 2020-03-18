@@ -54,7 +54,7 @@ object CacheEntity {
  * Summary application cache contains List(CacheEntity)
  * One cache entity ~= one dictionary - DictDataRows
 */
-case class Cache(HeartbeatCounter: Int, dictsMap: Map[Int, CacheEntity])
+case class Cache(HeartbeatCounter: Int, cacheCreatedTs: Long = System.currentTimeMillis, dictsMap: Map[Int, CacheEntity])
 /*
 object Cache{
    def apply(HeartbeatCounter: Int, dict: Map[Int, CacheEntity]): Cache =

@@ -115,6 +115,12 @@ object DbExecutor {
     (configuredDb, trqDict) =>
       for {
         cache <- ZIO.access[CacheManager](_.get)
+        cacheCurrentValue <- cache.getCacheValue
+
+        _ <- logInfo(s"getDict[1] cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
+          s" cacheBorn = ${cacheCurrentValue.cacheCreatedTs}" +
+          s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
+
         valFromCache: Option[CacheEntity] <- cache.get(trqDict.hashCode())
         dictRows <- valFromCache match {
           case Some(s :CacheEntity) => ZIO.succeed(s.dictDataRows)
@@ -122,6 +128,12 @@ object DbExecutor {
             db <- getDictFromCursor(configuredDb, trqDict)
             _ <- logInfo(s"<<<<<< value get from db ${db.name}")
             cache <- ZIO.access[CacheManager](_.get)
+            cacheCurrentValue <- cache.getCacheValue
+
+            _ <- logInfo(s"getDict[2] cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
+              s" cacheBorn = ${cacheCurrentValue.cacheCreatedTs}" +
+              s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
+
             _ <- logInfo(s"set value in cache ${trqDict.hashCode()} ")
             _ <- cache.set(trqDict.hashCode(), CacheEntity(System.currentTimeMillis, db, trqDict.reftables.getOrElse(Seq())))
           } yield db

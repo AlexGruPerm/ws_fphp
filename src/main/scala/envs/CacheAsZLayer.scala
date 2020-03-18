@@ -45,7 +45,8 @@ object CacheZLayerObject {
         Nothing,
         CacheManager.Service
       ]{
-        Ref.make(Cache(0, Map(1 -> CacheEntity(DictDataRows("empty", 0L, 0L, 0L, List(List())),Seq()))))
+        Ref.make(Cache(0, System.currentTimeMillis,
+          Map(1 -> CacheEntity(DictDataRows("empty", 0L, 0L, 0L, List(List())),Seq()))))
           .map(refEmpty => new refCache(refEmpty))
       }
     }
