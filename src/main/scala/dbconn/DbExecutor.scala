@@ -16,6 +16,7 @@ import org.postgresql.util.PSQLException
 import reqdata.Dict
 import zio.logging.{logInfo}
 import zio.{IO, Task, ZIO, clock}
+import zio.logging.{LogLevel, Logging, log, logError, logInfo, logTrace}
 
 
 //  loggetDict <- ZIO.access[Logging](_.logger)
@@ -77,6 +78,13 @@ object DbExecutor {
   private def getDictFromCursor: (DbConfig, Dict) => ZIO[ZEnvLogCache, Throwable, DictDataRows] =
     (configuredDb, trqDict) =>
       for {
+        cache <- ZIO.access[CacheManager](_.get)
+        cv <- cache.getCacheValue
+        _ <- logTrace(s"START - getDictFromCursor HeartbeatCounter = ${cv.HeartbeatCounter} " +
+          s"bornTs = ${cv.cacheCreatedTs}")
+        _ <- cache.addHeartbeat
+
+
         thisConfig <-
           if (configuredDb.name == trqDict.db) {
             Task(configuredDb)
@@ -100,9 +108,14 @@ object DbExecutor {
         //todo: try pass it direct (new PgConnection).sess(thisConfig)
         dsCursor = getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration)
         hashKey :Int = trqDict.hashCode() //todo: add user_session
-        cache <- ZIO.access[CacheManager](_.get)
+        //cache <- ZIO.access[CacheManager](_.get)
         dictRows <- dsCursor
         _ <- cache.set(hashKey, CacheEntity(System.currentTimeMillis, dictRows, trqDict.reftables.getOrElse(Seq())))
+
+        cvafter <- cache.getCacheValue
+        _ <- logTrace(s"cvafter - getDictFromCursor HeartbeatCounter = ${cvafter.HeartbeatCounter} " +
+          s"bornTs = ${cv.cacheCreatedTs}")
+
         //updateValueInCache(hashKey, cache, dsCursor, trqDict.reftables)
         ds <- dsCursor
         //we absolutely need close it to return to the pool
@@ -115,27 +128,33 @@ object DbExecutor {
     (configuredDb, trqDict) =>
       for {
         cache <- ZIO.access[CacheManager](_.get)
-        cacheCurrentValue <- cache.getCacheValue
-
-        _ <- logInfo(s"getDict[1] cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
-          s" cacheBorn = ${cacheCurrentValue.cacheCreatedTs}" +
-          s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
+        cv <- cache.getCacheValue
+        _ <- logTrace(s"START - getDict HeartbeatCounter = ${cv.HeartbeatCounter} " +
+          s"bornTs = ${cv.cacheCreatedTs}")
+        _ <- cache.addHeartbeat
+/*
+        _ <- logInfo(s"getDict[1] cacheCurrentValue HeartbeatCounter = ${cv.HeartbeatCounter}" +
+          s" cacheBorn = ${cv.cacheCreatedTs}" +
+          s" dictsMap.size = ${cv.dictsMap.size}")*/ //todo: open it
 
         valFromCache: Option[CacheEntity] <- cache.get(trqDict.hashCode())
         dictRows <- valFromCache match {
           case Some(s :CacheEntity) => ZIO.succeed(s.dictDataRows)
           case None => for {
             db <- getDictFromCursor(configuredDb, trqDict)
-            _ <- logInfo(s"<<<<<< value get from db ${db.name}")
-            cache <- ZIO.access[CacheManager](_.get)
-            cacheCurrentValue <- cache.getCacheValue
+            //_ <- logInfo(s"<<<<<< value get from db ${db.name}") todo: open it.
 
-            _ <- logInfo(s"getDict[2] cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
-              s" cacheBorn = ${cacheCurrentValue.cacheCreatedTs}" +
-              s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
+            /*
+            cacheDb <- ZIO.access[CacheManager](_.get)
+            cvdb <- cacheDb.getCacheValue
 
-            _ <- logInfo(s"set value in cache ${trqDict.hashCode()} ")
-            _ <- cache.set(trqDict.hashCode(), CacheEntity(System.currentTimeMillis, db, trqDict.reftables.getOrElse(Seq())))
+            _ <- logInfo(s"getDict[2] cacheCurrentValue HeartbeatCounter = ${cvdb.HeartbeatCounter}" +
+              s" cacheBorn = ${cvdb.cacheCreatedTs}" +
+              s" dictsMap.size = ${cvdb.dictsMap.size}")*/
+
+            //_ <- logInfo(s"set value in cache ${trqDict.hashCode()} ") todo: open it
+            // already set inside getDictFromCursor
+            // _ <- cache.set(trqDict.hashCode(), CacheEntity(System.currentTimeMillis, db, trqDict.reftables.getOrElse(Seq())))
           } yield db
         }
       } yield dictRows

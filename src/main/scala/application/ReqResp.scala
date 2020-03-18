@@ -155,15 +155,16 @@ object ReqResp {
 
       } yield checkResult //UIO.succeed(())
 
-  import zio.blocking._
-
-  lazy val routeDicts: (HttpRequest, DbConfig, Future[String]) => ZIO[ZEnvLogCache, Throwable, HttpResponse] =
-    (request, configuredDbList, reqEntity) =>
+    import zio.blocking._
+    val routeDicts: (HttpRequest, DbConfig, Future[String]) => ZIO[ZEnvLogCache, Throwable, HttpResponse] =
+      (request, configuredDbList, reqEntity) =>
       for {
         cache <- ZIO.access[CacheManager](_.get)
-        cacheCurrentValue <- cache.getCacheValue
-        _ <- logTrace(s"START routeDicts = ${cacheCurrentValue.HeartbeatCounter}")
-
+        cv <- cache.getCacheValue
+        _ <- logTrace("==========================================")
+        _ <- logTrace(s"START - routeDicts HeartbeatCounter = ${cv.HeartbeatCounter} " +
+          s"bornTs = ${cv.cacheCreatedTs}")
+        _ <- cache.addHeartbeat
 
         //_ <- logRequest(request) todo: open it
         reqRequestData = parseRequestData(reqEntity)

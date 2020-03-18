@@ -127,9 +127,10 @@ object WsServObj {
       actorSystem =>
         for {
           cache <- ZIO.access[CacheManager](_.get)
-          //cacheInitialValue <- cache.get(1)
           cv <- cache.getCacheValue
-          _ <- logInfo(s"Before startRequestHandler. Cache created ts  ${cv.cacheCreatedTs}")
+          _ <- logTrace(s"START - WsServer HeartbeatCounter = ${cv.HeartbeatCounter} " +
+            s"bornTs = ${cv.cacheCreatedTs}")
+          _ <- cache.addHeartbeat
 
           _ <- ZIO.sleep(2.seconds)
 
@@ -137,10 +138,16 @@ object WsServObj {
           _ <- fiber.join
 
           thisConnection = PgConnection(conf.dbListenConfig)
+
+          cacheCheckerValidation <- cacheValidator(conf.dbListenConfig, thisConnection)
+            .repeat(Schedule.spaced(3.second)).forkDaemon
+          _ <- cacheCheckerValidation.join
+          /*
           cacheCheckerValidation <- cacheValidator(conf.dbListenConfig, thisConnection)
             .repeat(Schedule.spaced(3.second)).forkDaemon *>
             cacheChecker.repeat(Schedule.spaced(4.second)).forkDaemon
           _ <- cacheCheckerValidation.join
+          */
 
           _ <- logInfo("After startRequestHandler, end of WsServer.")
         } yield ()
@@ -160,17 +167,19 @@ object WsServObj {
   //val timeoutSettings = ConnectionPoolSettings(actorSystem.settings.config).withIdleTimeout(10 minutes)
  //val connSettings = ClientConnectionSettings(actorSystem.settings.config).withIdleTimeout(3 seconds)
 
-  val serverSource: (Config, ActorSystem) => ZIO[ZEnvLog, Throwable, IncConnSrvBind] =
+  val serverSource: (Config, ActorSystem) => ZIO[ZEnvLogCache, Throwable, IncConnSrvBind] =
     (conf, actorSystem) => for {
 
-      //_  <- zio.logging.locallyAnnotate(correlationId,"server_source"){
-     //   log(LogLevel.Info)(s"Create Source[IncConnSrvBind] with ${conf.api.endpoint}:${conf.api.port}") &&&
-     //     log(LogLevel.Info)(s" In input config are configured dbname = ${conf.dbConfig.dbname} databases.")
-     // }.provideSomeM(env)
+      cache <- ZIO.access[CacheManager](_.get)
+      cv <- cache.getCacheValue
+      _ <- logTrace(s"START - serverSource HeartbeatCounter = ${cv.HeartbeatCounter} " +
+        s"bornTs = ${cv.cacheCreatedTs}")
+      _ <- cache.addHeartbeat
 
+      /*
       _ <- logInfo(s"Create Source[IncConnSrvBind] with ${conf.api.endpoint}:${conf.api.port}") &&&
            logInfo(s" In input config are configured dbname = ${conf.dbConfig.dbname} databases.")
-
+      */
       ss <- Task(Http(actorSystem).bind(interface = conf.api.endpoint, port = conf.api.port))
     } yield ss
 
@@ -230,11 +239,19 @@ object WsServObj {
       implicit val executionContext: ExecutionContextExecutor = system.dispatcher
       import akka.stream.scaladsl.Source
       for {
+        cache <- ZIO.access[CacheManager](_.get)
+        cv <- cache.getCacheValue
+        _ <- logTrace(s"START - startRequestHandler HeartbeatCounter = ${cv.HeartbeatCounter} " +
+          s"bornTs = ${cv.cacheCreatedTs}")
+        _ <- cache.addHeartbeat
+
         ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(conf,actorSystem)
         _ <- logInfo("ServerSource created")
         //cache <- ZIO.access[CacheManager](_.get)
         // Curried version of reqHandlerM has type HttpRequest => Future[HttpResponse]
-        reqHandlerFinal <- Task(reqHandlerM(conf.dbConfig, actorSystem) _)
+        reqHandlerFinal <- RIO(reqHandlerM(conf.dbConfig, actorSystem) _)
+
+        //RIO[R, A] — This is a type alias for ZIO[R, Throwable, A]
         requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] = ZIO.fromFunction(
           (r: HttpRequest) =>  reqHandlerFinal(r))
 
@@ -247,6 +264,17 @@ object WsServObj {
               )
           }
         )
+        /*
+        ZIO.fromFunction((srv: IncConnSrvBind) =>
+          srv.runForeach {
+            conn =>
+              conn.handleWithAsyncHandler(
+                r => Runtime.default.unsafeRun(requestHandlerFunc.provide(r))
+              )
+          }
+        )
+        */
+
         sourceWithServer <- serverWithReqHandler.provide(ss)
       } yield sourceWithServer
     }

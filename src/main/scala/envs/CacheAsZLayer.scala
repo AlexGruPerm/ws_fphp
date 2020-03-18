@@ -28,9 +28,11 @@ object CacheZLayerObject {
 
       override def get(key: Int): UIO[Option[CacheEntity]] = ref.get.map(_.dictsMap.get(key))
 
-      override def set(key: Int, value: CacheEntity): UIO[Unit] =
-        ref.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 100,
+      override def set(key: Int, value: CacheEntity): UIO[Unit] = {
+       //println(s"METHOD SET - CURR HBC = ${ref.get.map(_.HeartbeatCounter)}")
+       ref.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 100,
           dictsMap = cv.dictsMap + (key -> value)))
+    }
 
       override def remove(keys: Seq[Int]): UIO[Unit] =
         ref.update(cvu => cvu.copy(HeartbeatCounter = cvu.HeartbeatCounter + 1,
