@@ -216,7 +216,7 @@ object WsServObj {
     }
 
     Runtime.default.unsafeRunToFuture(
-      responseFuture.provideLayer(envs.EnvContainer.ZEnvLogCacheLayer)
+      responseFuture.provideCustomLayer(envs.EnvContainer.ZEnvLogCacheLayer)
     )
 
   }
