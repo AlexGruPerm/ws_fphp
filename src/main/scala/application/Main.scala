@@ -1,13 +1,13 @@
 package application
 
-import zio.App
+import zio.{App, Layer, Runtime, Task, UIO, ZEnv, ZIO}
 import confs.Configuration
 import envs.EnvContainer.{ZEnvLog, ZEnvLogCache}
 import zio.logging._
-import zio.{Task, UIO, ZEnv, ZIO}
 import zio.console.putStrLn
 
 object Main extends App {
+
   private def checkArgs : List[String] => ZIO[ZEnv,Throwable,Unit] = args => for {
     checkRes <- if (args.length < 0) {
       Task.fail(new IllegalArgumentException("Need config file as parameter."))}
@@ -20,7 +20,9 @@ object Main extends App {
       _ <- logInfo("Web service starting")
       _ <- checkArgs(args)
       cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
-      res <- WsServObj.WsServer(cfg)
+      l: Layer[Nothing, ZEnvLogCache] = ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer
+      rt: Runtime.Managed[ZEnvLogCache]  = Runtime.unsafeFromLayer(l)
+      res <- WsServObj.WsServer(cfg, rt)
       _ <- logInfo("Web service stopping!")
     } yield res
 

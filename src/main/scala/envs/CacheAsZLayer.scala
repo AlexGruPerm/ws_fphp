@@ -18,7 +18,6 @@ object CacheZLayerObject {
       def remove(keys: Seq[Int]): UIO[Unit]
     }
 
-
     //#4
     final class refCache(ref: Ref[Cache]) extends CacheManager.Service {
       override def addHeartbeat: UIO[Unit] =

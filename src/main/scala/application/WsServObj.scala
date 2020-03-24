@@ -18,7 +18,7 @@ import envs.EnvContainer
 import envs.EnvContainer.{ZEnvLog, ZEnvLogCache}
 import org.postgresql.PGNotification
 import zio.logging.{LogLevel, Logging, log, logInfo, logTrace}
-import zio.{Runtime, _}
+import zio.{Layer, Runtime, _}
 
 import scala.Option
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
@@ -36,7 +36,7 @@ object WsServObj {
     for {
       cache <- ZIO.access[CacheManager](_.get)
       cacheCurrentValue <- cache.getCacheValue
-      _ <- logInfo(s"cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
+      _ <- logInfo(s"cacheChecker -> cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
         s" cacheBorn = ${cacheCurrentValue.cacheCreatedTs}" +
         s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
       _ <- cache.addHeartbeat
@@ -121,7 +121,7 @@ object WsServObj {
    *
    */
   import scala.concurrent.duration.Duration
-  val WsServer: Config => ZIO[ZEnvLogCache, Throwable, Unit] = conf => {
+  val WsServer: (Config,Runtime.Managed[ZEnvLogCache]) => ZIO[ZEnvLogCache, Throwable, Unit] = (conf,rt) => {
     import zio.duration._
     val wsRes = Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
@@ -134,20 +134,22 @@ object WsServObj {
 
           _ <- ZIO.sleep(2.seconds)
 
-          fiber <- startRequestHandler(conf, actorSystem).forkDaemon
+          fiber <- startRequestHandler(conf, actorSystem, rt).forkDaemon
           _ <- fiber.join
 
           thisConnection = PgConnection(conf.dbListenConfig)
 
+          /*
           cacheCheckerValidation <- cacheValidator(conf.dbListenConfig, thisConnection)
             .repeat(Schedule.spaced(3.second)).forkDaemon
           _ <- cacheCheckerValidation.join
-          /*
-          cacheCheckerValidation <- cacheValidator(conf.dbListenConfig, thisConnection)
-            .repeat(Schedule.spaced(3.second)).forkDaemon *>
-            cacheChecker.repeat(Schedule.spaced(4.second)).forkDaemon
-          _ <- cacheCheckerValidation.join
           */
+
+          cacheCheckerValidation <- /*cacheValidator(conf.dbListenConfig, thisConnection)
+            .repeat(Schedule.spaced(3.second)).forkDaemon *>*/
+            cacheChecker.repeat(Schedule.spaced(2.second)).forkDaemon
+          _ <- cacheCheckerValidation.join
+
 
           _ <- logInfo("After startRequestHandler, end of WsServer.")
         } yield ()
@@ -187,7 +189,7 @@ object WsServObj {
   /**
    * dbConfigList are registered list of databases from config file - application.conf
   */
-  def reqHandlerM(dbConfigList: DbConfig, actorSystem: ActorSystem)(request: HttpRequest):
+  def reqHandlerM(dbConfigList: DbConfig, actorSystem: ActorSystem, rt: Runtime.Managed[ZEnvLogCache])(request: HttpRequest):
   Future[HttpResponse] = {
     implicit val system: ActorSystem = actorSystem
 
@@ -215,10 +217,15 @@ object WsServObj {
       }
     }
 
+    rt.unsafeRunToFuture(
+      responseFuture
+    )
+
+  /*
     Runtime.default.unsafeRunToFuture(
       responseFuture.provideCustomLayer(envs.EnvContainer.ZEnvLogCacheLayer)
     )
-
+*/
   }
 
 
@@ -231,54 +238,48 @@ object WsServObj {
    * (handler: HttpRequest => Future[HttpResponse])
    *
    */
-  val startRequestHandler: (Config, ActorSystem) => ZIO[ZEnvLogCache, Throwable, Future[Done]] =
-    ( conf, actorSystem) => {
+  import zio.internal.Platform
+  val startRequestHandler: (Config, ActorSystem, Runtime.Managed[ZEnvLogCache]) => ZIO[ZEnvLogCache, Throwable, Future[Done]] =
+    ( conf, actorSystem, rt) => {
       implicit val system: ActorSystem = actorSystem
       import scala.concurrent.duration._
       implicit val timeout: Timeout = Timeout(120 seconds)
       implicit val executionContext: ExecutionContextExecutor = system.dispatcher
       import akka.stream.scaladsl.Source
       for {
-        cache <- ZIO.access[CacheManager](_.get)
-        cv <- cache.getCacheValue
-        _ <- logTrace(s"START - startRequestHandler HeartbeatCounter = ${cv.HeartbeatCounter} " +
-          s"bornTs = ${cv.cacheCreatedTs}")
-        _ <- cache.addHeartbeat
+            cache <- ZIO.access[CacheManager](_.get)
+            cv <- cache.getCacheValue
+            _ <- logTrace(s"START - startRequestHandler HeartbeatCounter = ${cv.HeartbeatCounter} " +
+              s"bornTs = ${cv.cacheCreatedTs}")
+            _ <- cache.addHeartbeat
+
+            /*
+            //todo: maybe move it outise in run method.
+            l: Layer[Nothing, ZEnvLogCache] = ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer
+            rt: Runtime.Managed[ZEnvLogCache]  = Runtime.unsafeFromLayer(l)
+            */
 
         ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(conf,actorSystem)
         _ <- logInfo("ServerSource created")
-        //cache <- ZIO.access[CacheManager](_.get)
-        // Curried version of reqHandlerM has type HttpRequest => Future[HttpResponse]
-        reqHandlerFinal <- RIO(reqHandlerM(conf.dbConfig, actorSystem) _)
+        reqHandlerFinal <- RIO(reqHandlerM(conf.dbConfig, actorSystem, rt) _)
 
-        //RIO[R, A] — This is a type alias for ZIO[R, Throwable, A]
         requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] = ZIO.fromFunction(
           (r: HttpRequest) =>  reqHandlerFinal(r))
 
-        serverWithReqHandler: RIO[IncConnSrvBind, Future[Done]] =
-        ZIO.fromFunction((srv: IncConnSrvBind) =>
-          srv.runForeach {
-            conn =>
-              conn.handleWithAsyncHandler(
-                r => Runtime.default.unsafeRun(requestHandlerFunc.provide(r))
-              )
-          }
-        )
-        /*
-        ZIO.fromFunction((srv: IncConnSrvBind) =>
-          srv.runForeach {
-            conn =>
-              conn.handleWithAsyncHandler(
-                r => Runtime.default.unsafeRun(requestHandlerFunc.provide(r))
-              )
-          }
-        )
-        */
+        serverWithReqHandler=
+        ss.runForeach{
+          conn =>
+            conn.handleWithAsyncHandler(
+              r => rt.unsafeRun(requestHandlerFunc.provide(r)) //just need send our rt internal
+            )
+        }
 
-        sourceWithServer <- serverWithReqHandler.provide(ss)
+        sourceWithServer <- ZIO.succeed(serverWithReqHandler)
       } yield sourceWithServer
     }
 
+
+  //r => Runtime.default.unsafeRun(requestHandlerFunc.provide(r))
 
 }
 

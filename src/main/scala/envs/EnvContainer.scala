@@ -1,6 +1,6 @@
 package envs
 
-import zio.{ZEnv, ZLayer}
+import zio.{ZEnv, ZLayer, Layer}
 import zio.clock.Clock
 import zio.console.Console
 import zio.logging.Logging
@@ -10,7 +10,7 @@ object EnvContainer {
   type ZEnvLog = ZEnv with Logging
   type ZEnvLogCache =  ZEnvLog with CacheManager
 
-  private val env: ZLayer[Console with Clock, Nothing, Logging]   =
+   val env: ZLayer[Console with Clock, Nothing, Logging]   =
     Logging.console((_, logEntry) =>
       logEntry
     )
@@ -19,6 +19,5 @@ object EnvContainer {
 
   val ZEnvLogCacheLayer: ZLayer[ZEnv, Nothing, ZEnvLogCache] =
     ZEnv.live ++ env /*++ ZEnv.live*/ ++ CacheManager.refCache
-
 
 }
