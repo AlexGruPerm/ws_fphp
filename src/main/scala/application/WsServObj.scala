@@ -17,7 +17,7 @@ import envs.CacheZLayerObject.CacheManager
 import envs.EnvContainer
 import envs.EnvContainer.{ZEnvLog, ZEnvLogCache}
 import org.postgresql.PGNotification
-import zio.logging.{LogLevel, Logging, log, logInfo, logTrace}
+import zio.logging.{LogLevel, Logging, log}
 import zio.{Layer, Runtime, _}
 
 import scala.Option
@@ -36,7 +36,7 @@ object WsServObj {
     for {
       cache <- ZIO.access[CacheManager](_.get)
       cacheCurrentValue <- cache.getCacheValue
-      _ <- logInfo(s"cacheChecker -> cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
+      _ <- log.info(s"cacheChecker -> cacheCurrentValue HeartbeatCounter = ${cacheCurrentValue.HeartbeatCounter}" +
         s" cacheBorn = ${cacheCurrentValue.cacheCreatedTs}" +
         s" dictsMap.size = ${cacheCurrentValue.dictsMap.size}")
       _ <- cache.addHeartbeat
@@ -47,12 +47,12 @@ object WsServObj {
    */
   private val removeFromCacheByRefTable: String => ZIO[ZEnvLogCache, Throwable, Unit] = tableName =>
     for {
-      _ <- logInfo(s"DB Listener PID = ")
+      _ <- log.info(s"DB Listener PID = ")
       cache <- ZIO.access[CacheManager](_.get)
       cv <- cache.getCacheValue
-      _ <- logInfo(s"All keys = ${cv.dictsMap.keySet}")
+      _ <- log.info(s"All keys = ${cv.dictsMap.keySet}")
       foundKeys: Seq[Int] = hashKeysForRemove(cv.dictsMap, tableName)
-      _ <- logInfo(s"keys for removing from cache $foundKeys")
+      _ <- log.info(s"keys for removing from cache $foundKeys")
       _ <- cache.remove(foundKeys)
     } yield ()
 
@@ -79,27 +79,27 @@ object WsServObj {
       pgsessLs <- pgsessSrc.sess orElse
         PgConnection(conf).sess.retry(Schedule.recurs(3) && Schedule.spaced(2.seconds))
 
-      //todo: open _ <- logInfo(s"DB Listener PID = ${pgsessLs.pid}")
+      //todo: open _ <- log.info(s"DB Listener PID = ${pgsessLs.pid}")
       notifications = scala.Option(pgsessLs.sess.getNotifications).getOrElse(Array[PGNotification]()) //timeout
 
       //todo: open it
 //      _ <- if (notifications.nonEmpty) {
-//        logInfo(s"notifications size = ${notifications.size}")
+//        log.info(s"notifications size = ${notifications.size}")
 //      } else {
-//        logInfo(s"notifications size = 0")
+//        log.info(s"notifications size = 0")
 //      }
 
     _ <- ZIO.foreach(notifications) { nt =>
         if (nt.getName == "change") {
           for {
-            _ <- logInfo(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
+            _ <- log.info(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
             _ <- removeFromCacheByRefTable(nt.getParameter)
           } yield UIO.succeed(())
         } else {
           UIO.succeed(())
         }
       }.catchAllCause {
-      e => logInfo(s" cacheValidator Exception $e")
+      e => log.info(s" cacheValidator Exception $e")
     }
 
   } yield ()
@@ -128,7 +128,7 @@ object WsServObj {
         for {
           cache <- ZIO.access[CacheManager](_.get)
           cv <- cache.getCacheValue
-          _ <- logTrace(s"START - WsServer HeartbeatCounter = ${cv.HeartbeatCounter} " +
+          _ <- log.trace(s"START - WsServer HeartbeatCounter = ${cv.HeartbeatCounter} " +
             s"bornTs = ${cv.cacheCreatedTs}")
           _ <- cache.addHeartbeat
 
@@ -151,7 +151,7 @@ object WsServObj {
           _ <- cacheCheckerValidation.join
 
 
-          _ <- logInfo("After startRequestHandler, end of WsServer.")
+          _ <- log.info("After startRequestHandler, end of WsServer.")
         } yield ()
     )
 
@@ -174,13 +174,13 @@ object WsServObj {
 
       cache <- ZIO.access[CacheManager](_.get)
       cv <- cache.getCacheValue
-      _ <- logTrace(s"START - serverSource HeartbeatCounter = ${cv.HeartbeatCounter} " +
+      _ <- log.trace(s"START - serverSource HeartbeatCounter = ${cv.HeartbeatCounter} " +
         s"bornTs = ${cv.cacheCreatedTs}")
       _ <- cache.addHeartbeat
 
       /*
-      _ <- logInfo(s"Create Source[IncConnSrvBind] with ${conf.api.endpoint}:${conf.api.port}") &&&
-           logInfo(s" In input config are configured dbname = ${conf.dbConfig.dbname} databases.")
+      _ <- log.info(s"Create Source[IncConnSrvBind] with ${conf.api.endpoint}:${conf.api.port}") &&&
+           log.info(s" In input config are configured dbname = ${conf.dbConfig.dbname} databases.")
       */
       ss <- Task(Http(actorSystem).bind(interface = conf.api.endpoint, port = conf.api.port))
     } yield ss
@@ -251,7 +251,7 @@ object WsServObj {
       for {
             cache <- ZIO.access[CacheManager](_.get)
             cv <- cache.getCacheValue
-            _ <- logTrace(s"START - startRequestHandler HeartbeatCounter = ${cv.HeartbeatCounter} " +
+            _ <- log.trace(s"START - startRequestHandler HeartbeatCounter = ${cv.HeartbeatCounter} " +
               s"bornTs = ${cv.cacheCreatedTs}")
             _ <- cache.addHeartbeat
 
@@ -263,7 +263,7 @@ object WsServObj {
             rti <- ZIO.runtime[ZEnvLogCache]
 
         ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(conf,actorSystem)
-        _ <- logInfo("ServerSource created")
+        _ <- log.info("ServerSource created")
         reqHandlerFinal <- RIO(reqHandlerM(conf.dbConfig, actorSystem, rt) _)
 
         requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] = ZIO.fromFunction(

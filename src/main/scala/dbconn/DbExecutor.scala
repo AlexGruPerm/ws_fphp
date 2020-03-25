@@ -14,9 +14,8 @@ import io.circe.generic.auto._
 import io.circe.syntax._
 import org.postgresql.util.PSQLException
 import reqdata.Dict
-import zio.logging.{logInfo}
 import zio.{IO, Task, ZIO, clock}
-import zio.logging.{LogLevel, Logging, log, logError, logInfo, logTrace}
+import zio.logging.{LogLevel, Logging, log}
 
 
 //  loggetDict <- ZIO.access[Logging](_.logger)
@@ -80,7 +79,7 @@ object DbExecutor {
       for {
         cache <- ZIO.access[CacheManager](_.get)
         cv <- cache.getCacheValue
-        _ <- logTrace(s"START - getDictFromCursor HeartbeatCounter = ${cv.HeartbeatCounter} " +
+        _ <- log.trace(s"START - getDictFromCursor HeartbeatCounter = ${cv.HeartbeatCounter} " +
           s"bornTs = ${cv.cacheCreatedTs}")
         _ <- cache.addHeartbeat
 
@@ -113,7 +112,7 @@ object DbExecutor {
         _ <- cache.set(hashKey, CacheEntity(System.currentTimeMillis, dictRows, trqDict.reftables.getOrElse(Seq())))
 
         cvafter <- cache.getCacheValue
-        _ <- logTrace(s"cvafter - getDictFromCursor HeartbeatCounter = ${cvafter.HeartbeatCounter} " +
+        _ <- log.trace(s"cvafter - getDictFromCursor HeartbeatCounter = ${cvafter.HeartbeatCounter} " +
           s"bornTs = ${cv.cacheCreatedTs}")
 
         //updateValueInCache(hashKey, cache, dsCursor, trqDict.reftables)
@@ -129,11 +128,11 @@ object DbExecutor {
       for {
         cache <- ZIO.access[CacheManager](_.get)
         cv <- cache.getCacheValue
-        _ <- logTrace(s"START - getDict HeartbeatCounter = ${cv.HeartbeatCounter} " +
+        _ <- log.trace(s"START - getDict HeartbeatCounter = ${cv.HeartbeatCounter} " +
           s"bornTs = ${cv.cacheCreatedTs}")
         _ <- cache.addHeartbeat
 /*
-        _ <- logInfo(s"getDict[1] cacheCurrentValue HeartbeatCounter = ${cv.HeartbeatCounter}" +
+        _ <- log.info(s"getDict[1] cacheCurrentValue HeartbeatCounter = ${cv.HeartbeatCounter}" +
           s" cacheBorn = ${cv.cacheCreatedTs}" +
           s" dictsMap.size = ${cv.dictsMap.size}")*/ //todo: open it
 
@@ -142,17 +141,17 @@ object DbExecutor {
           case Some(s :CacheEntity) => ZIO.succeed(s.dictDataRows)
           case None => for {
             db <- getDictFromCursor(configuredDb, trqDict)
-            //_ <- logInfo(s"<<<<<< value get from db ${db.name}") todo: open it.
+            //_ <- log.info(s"<<<<<< value get from db ${db.name}") todo: open it.
 
             /*
             cacheDb <- ZIO.access[CacheManager](_.get)
             cvdb <- cacheDb.getCacheValue
 
-            _ <- logInfo(s"getDict[2] cacheCurrentValue HeartbeatCounter = ${cvdb.HeartbeatCounter}" +
+            _ <- log.info(s"getDict[2] cacheCurrentValue HeartbeatCounter = ${cvdb.HeartbeatCounter}" +
               s" cacheBorn = ${cvdb.cacheCreatedTs}" +
               s" dictsMap.size = ${cvdb.dictsMap.size}")*/
 
-            //_ <- logInfo(s"set value in cache ${trqDict.hashCode()} ") todo: open it
+            //_ <- log.info(s"set value in cache ${trqDict.hashCode()} ") todo: open it
             // already set inside getDictFromCursor
             // _ <- cache.set(trqDict.hashCode(), CacheEntity(System.currentTimeMillis, db, trqDict.reftables.getOrElse(Seq())))
           } yield db
@@ -164,7 +163,7 @@ object DbExecutor {
 //    valFromCache: CacheEntity <- cache.get(trqDict.hashCode()).foldM(
 //      _ => for {
 //        db <- getDictFromCursor(configuredDb, trqDict)
-//        _ <- logInfo(s"<<<<<< value get from db ${db.name}")
+//        _ <- log.info(s"<<<<<< value get from db ${db.name}")
 //        cache <- ZIO.access[CacheManager](_.get)
 //        _ <- cache.set(trqDict.hashCode(), CacheEntity(System.currentTimeMillis, db, trqDict.reftables.getOrElse(Seq())))
 //      } yield db,
@@ -177,11 +176,11 @@ object DbExecutor {
 //      (for {
 //        cache <- ZIO.access[CacheManager](_.get)
 //        valFromCache <- cache.get(trqDict.hashCode())//getValueFromCache(trqDict.hashCode(), cache)
-//        _ <- logInfo(s">>>>>> value found in cache ${valFromCache.get} for hashKey=${trqDict.hashCode()}")
+//        _ <- log.info(s">>>>>> value found in cache ${valFromCache.get} for hashKey=${trqDict.hashCode()}")
 //      } yield valFromCache.get.dictDataRows).foldM(
 //        _ => for {
 //          db <- getDictFromCursor(configuredDb, trqDict)
-//          _ <- logInfo(s"<<<<<< value get from db ${db.name}")
+//          _ <- log.info(s"<<<<<< value get from db ${db.name}")
 //          //_ <- updateValueInCache(trqDict.hashCode(),cache,Task(db),trqDict.reftables)
 //          cache <- ZIO.access[CacheManager](_.get)
 //          _ <- cache.set(trqDict.hashCode(), CacheEntity(System.currentTimeMillis, db, trqDict.reftables.getOrElse(Seq())))

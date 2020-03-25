@@ -37,7 +37,7 @@ import reqdata.{Dict, NoConfigureDbInRequest, ReqParseException, RequestData}
 import zio.clock.Clock
 import io.circe.generic.JsonCodec
 import testsjsons.CollectJsons
-import zio.logging.{LogLevel, Logging, log, logError, logInfo, logTrace}
+import zio.logging.{LogLevel, Logging, log}
 
 import scala.util.{Failure, Success, Try}
 
@@ -55,32 +55,32 @@ object ReqResp {
   val pnf:Int = 404
 
   val logRequest: HttpRequest => ZIO[ZEnvLog, Throwable, Unit] = request => for {
-    _ <- logTrace(s"================= ${request.method} REQUEST ${request.protocol.value} =====")
-    _ <- logTrace(s"uri : ${request.uri} ")
-    _ <- logTrace("  ---------- HEADER ---------")
-    _ <- URIO.foreach(request.headers.zipWithIndex)(hdr => logTrace(s"   #${hdr._2} : ${hdr._1.toString}"))
-    _ <- logTrace(s"  ---------------------------")
-    //_ <- logTrace(s"entity ${request.entity.toString} ") todo: open ???
-    _ <- logTrace("========================================================")
+    _ <- log.trace(s"================= ${request.method} REQUEST ${request.protocol.value} =====")
+    _ <- log.trace(s"uri : ${request.uri} ")
+    _ <- log.trace("  ---------- HEADER ---------")
+    _ <- URIO.foreach(request.headers.zipWithIndex)(hdr => log.trace(s"   #${hdr._2} : ${hdr._1.toString}"))
+    _ <- log.trace(s"  ---------------------------")
+    //_ <- log.trace(s"entity ${request.entity.toString} ") todo: open ???
+    _ <- log.trace("========================================================")
   } yield ()
 
 
   val logReqData: Task[RequestData] => ZIO[ZEnvLog, Throwable, Unit] = reqData => for {
     rd <- reqData
-    _ <- logTrace("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-    _ <- logTrace(s"session_id = ${rd.user_session}")
-    _ <- logTrace(s"encoding_gzip = ${rd.cont_encoding_gzip_enabled}")
-    _ <- logTrace(s"dicts size = ${rd.dicts.size}")
+    _ <- log.trace("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+    _ <- log.trace(s"session_id = ${rd.user_session}")
+    _ <- log.trace(s"encoding_gzip = ${rd.cont_encoding_gzip_enabled}")
+    _ <- log.trace(s"dicts size = ${rd.dicts.size}")
     _ <- URIO.foreach(rd.dicts) { d =>
-      logTrace(s"dict = ${d.db} - ${d.proc} ")
+      log.trace(s"dict = ${d.db} - ${d.proc} ")
       for {
-        _ <- logTrace(s" ref tables in dict : ${d.reftables.getOrElse(Seq()).size} ")
+        _ <- log.trace(s" ref tables in dict : ${d.reftables.getOrElse(Seq()).size} ")
         _ <- URIO.foreach(d.reftables.getOrElse(Seq())) { tableName =>
-          logTrace(s"  reftable = $tableName ")
+          log.trace(s"  reftable = $tableName ")
         }
       } yield URIO.unit
     }
-    _ <- logTrace("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+    _ <- log.trace("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
   } yield ()
 
   /**
@@ -161,8 +161,8 @@ object ReqResp {
       for {
         cache <- ZIO.access[CacheManager](_.get)
         cv <- cache.getCacheValue
-        _ <- logTrace("==========================================")
-        _ <- logTrace(s"START - routeDicts HeartbeatCounter = ${cv.HeartbeatCounter} " +
+        _ <- log.trace("==========================================")
+        _ <- log.trace(s"START - routeDicts HeartbeatCounter = ${cv.HeartbeatCounter} " +
           s"bornTs = ${cv.cacheCreatedTs}")
         _ <- cache.addHeartbeat
 

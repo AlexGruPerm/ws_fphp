@@ -1,10 +1,11 @@
 package envs
 
-import zio.{ZEnv, ZLayer, Layer}
+import zio.{Layer, ZEnv, ZLayer}
 import zio.clock.Clock
 import zio.console.Console
-import zio.logging.Logging
 import CacheZLayerObject._
+import zio.logging.Logging
+import zio.logging.Logging.Logging
 
 object EnvContainer {
   type ZEnvLog = ZEnv with Logging
