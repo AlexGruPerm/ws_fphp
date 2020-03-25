@@ -15,13 +15,8 @@ import io.circe.syntax._
 import org.postgresql.util.PSQLException
 import reqdata.Dict
 import zio.{IO, Task, ZIO, clock}
-import zio.logging.{LogLevel, Logging, log}
+import zio.logging.{log}
 
-
-//  loggetDict <- ZIO.access[Logging](_.logger)
-//  _ <- loggetDict.locallyAnnotate(correlationId, "db_get_dict") {
-//    log(LogLevel.Debug)(s"Connection opened for ${thisConfig.name} begin req ${trqDict.name}"/*conn.environment.connection.getClientInfo()*/)
-//  }
 
 object DbExecutor {
 

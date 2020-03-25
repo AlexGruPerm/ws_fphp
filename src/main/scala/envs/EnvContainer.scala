@@ -1,6 +1,6 @@
 package envs
 
-import zio.{Layer, ZEnv, ZLayer}
+import zio.{ZEnv, ZLayer}
 import zio.clock.Clock
 import zio.console.Console
 import CacheZLayerObject._
