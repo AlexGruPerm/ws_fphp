@@ -217,6 +217,8 @@ object WsServObj {
       }
     }
 
+
+
     rt.unsafeRunToFuture(
       responseFuture
     )
@@ -258,6 +260,7 @@ object WsServObj {
             l: Layer[Nothing, ZEnvLogCache] = ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer
             rt: Runtime.Managed[ZEnvLogCache]  = Runtime.unsafeFromLayer(l)
             */
+            rti <- ZIO.runtime[ZEnvLogCache]
 
         ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(conf,actorSystem)
         _ <- logInfo("ServerSource created")
@@ -265,8 +268,6 @@ object WsServObj {
 
         requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] = ZIO.fromFunction(
           (r: HttpRequest) =>  reqHandlerFinal(r))
-
-        rti <- ZIO.runtime[ZEnvLogCache]
 
         serverWithReqHandler=
         ss.runForeach{
