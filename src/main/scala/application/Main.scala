@@ -15,25 +15,36 @@ object Main extends App {
     }
   } yield checkRes
 
-  private def wsApp: List[String] => ZIO[ZEnvLogCache, Throwable, Unit] = args =>
+
+
+  private def wsApp: (List[String],Runtime.Managed[ZEnvLogCache]) => ZIO[ZEnvLogCache, Throwable, Unit] = (args,rt) =>
     for {
       _ <- logInfo("Web service starting")
       _ <- checkArgs(args)
       cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
-      l: Layer[Nothing, ZEnvLogCache] = ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer
-      rt: Runtime.Managed[ZEnvLogCache]  = Runtime.unsafeFromLayer(l)
+//      l: Layer[Nothing, ZEnvLogCache] = ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer
+//      rt: Runtime.Managed[ZEnvLogCache]  = Runtime.unsafeFromLayer(l)
       res <- WsServObj.WsServer(cfg, rt)
       _ <- logInfo("Web service stopping!")
     } yield res
 
-  override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] =
-    wsApp(args).provideCustomLayer(envs.EnvContainer.ZEnvLogCacheLayer)
+  override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] = {
+    val l: Layer[Nothing, ZEnvLogCache] = ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer
+    val rt: Runtime.Managed[ZEnvLogCache]  = Runtime.unsafeFromLayer(l)
+    rt.unsafeRun(wsApp(args,rt))
+    Task.succeed(0)
+    /*
+    wsApp(args,rt).provideCustomLayer(envs.EnvContainer.ZEnvLogCacheLayer)
       .foldM(throwable => putStrLn(s"Error: ${throwable.getMessage}") *>
             ZIO.foreach(throwable.getStackTrace) { sTraceRow =>
               putStrLn(s"$sTraceRow")
             } as 1,
         _ =>  putStrLn(s"Success exit of application.") as 0
       )
+    */
+  }
+
+
 }
 
 
