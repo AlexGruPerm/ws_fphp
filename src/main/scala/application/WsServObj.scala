@@ -266,11 +266,13 @@ object WsServObj {
         requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] = ZIO.fromFunction(
           (r: HttpRequest) =>  reqHandlerFinal(r))
 
+        rti <- ZIO.runtime[ZEnvLogCache]
+
         serverWithReqHandler=
         ss.runForeach{
           conn =>
             conn.handleWithAsyncHandler(
-              r => rt.unsafeRun(requestHandlerFunc.provide(r)) //just need send our rt internal
+              r => rti.unsafeRun(requestHandlerFunc.provide(r))
             )
         }
 

@@ -29,7 +29,6 @@ object Main extends App {
   override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] = {
     val appLayer: Layer[Nothing, ZEnvLogCache] = ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer
     val rt: Runtime.Managed[ZEnvLogCache]  = Runtime.unsafeFromLayer(appLayer)
-    rt.unsafeRun(wsApp(args,rt))
     ZIO(rt.unsafeRun(wsApp(args,rt))).foldM(throwable => putStrLn(s"Error: ${throwable.getMessage}") *>
       ZIO.foreach(throwable.getStackTrace) { sTraceRow =>
         putStrLn(s"$sTraceRow")
