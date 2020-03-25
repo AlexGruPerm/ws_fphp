@@ -231,6 +231,7 @@ object WsServObj {
   }
 
 
+
   /**
    * 1) runForeach(f: Out => Unit): Future[Done] - is a method of class "Source"
    *
@@ -266,14 +267,18 @@ object WsServObj {
         _ <- log.info("ServerSource created")
         reqHandlerFinal <- RIO(reqHandlerM(conf.dbConfig, actorSystem, rt) _)
 
+            /*
         requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] = ZIO.fromFunction(
-          (r: HttpRequest) =>  reqHandlerFinal(r))
+        (r: HttpRequest) =>  reqHandlerFinal(r))
+            val requestHandlerFunc2: (HttpRequest => RIO[HttpRequest, Future[HttpResponse]]) = r =>
+              reqHandlerFinal(r)
+          */
 
         serverWithReqHandler=
         ss.runForeach{
           conn =>
             conn.handleWithAsyncHandler(
-              r => rti.unsafeRun(requestHandlerFunc.provide(r))
+              r => rti.unsafeRun(ZIO(reqHandlerFinal(r)))
             )
         }
 
