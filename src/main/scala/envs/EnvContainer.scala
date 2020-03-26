@@ -4,10 +4,16 @@ import zio.{ZEnv, ZLayer}
 import zio.clock.Clock
 import zio.console.Console
 import CacheZLayerObject._
+import akka.http.scaladsl.Http.{IncomingConnection, ServerBinding}
 import zio.logging.Logging
 import zio.logging.Logging.Logging
 
+import scala.concurrent.Future
+
+
 object EnvContainer {
+  type IncConnSrvBind = akka.stream.scaladsl.Source[IncomingConnection, Future[ServerBinding]]
+
   type ZEnvLog = ZEnv with Logging
   type ZEnvLogCache =  ZEnvLog with CacheManager
 

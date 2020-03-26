@@ -8,6 +8,7 @@ import zio.console.putStrLn
 
 object Main extends App {
 
+  /*
   private def checkArgs: List[String] => ZIO[ZEnv, Throwable, Unit] = args => for {
     checkRes <- if (args.isEmpty) {
       Task.fail(new IllegalArgumentException("Need config file as parameter."))
@@ -16,11 +17,12 @@ object Main extends App {
       UIO.succeed(())
     }
   } yield checkRes
+  */
 
   private def wsApp: List[String] => ZIO[ZEnvLogCache, Throwable, Unit] = args =>
     for {
       _ <- log.info("Web service starting")
-      _ <- checkArgs(args)
+      //_ <- checkArgs(args) todo: closed for dev reasons.
       cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
       res <- WsServObj.WsServer(cfg)
       _ <- log.info("Web service stopping!")
@@ -38,7 +40,6 @@ object Main extends App {
   }
 
 }
-
 
 //cfg <- Configuration.config.load("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/application.conf")
 /**
