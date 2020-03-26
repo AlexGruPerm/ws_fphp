@@ -1,10 +1,8 @@
 package envs
 
-
 import java.io.File
 import java.util.Properties
 
-import confs.Config
 import data.{Cache, CacheEntity, DictDataRows}
 import pureconfig.ConfigSource
 import zio.{Has, RIO, Tagged, Task, UIO, ZIO, ZLayer}
@@ -54,9 +52,8 @@ object ConfAsZLayer {
     }
 
     //#5
-    def wsConf(implicit tag: Tagged[Configuration.Service]
-                ): ZLayer[Any, Nothing, Configuration] = {
-        ZLayer.succeed(new wsConf {} )
+    def wsConf(implicit tag: Tagged[Configuration.Service]): ZLayer[Any, Nothing, Configuration] = {
+      ZLayer.succeed(new wsConf {})
     }
 
   }

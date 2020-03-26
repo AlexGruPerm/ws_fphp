@@ -1,7 +1,8 @@
 package dbconn
 
-import java.sql.{Connection}
-import confs.DbConfig
+import java.sql.Connection
+
+import envs.DbConfig
 import org.apache.commons.dbcp2.BasicDataSource
 import reqdata.Dict
 

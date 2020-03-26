@@ -1,7 +1,7 @@
 package application
 
+import envs.ConfAsZLayer.Configuration
 import zio.{App, Layer, Runtime, Task, UIO, ZEnv, ZIO}
-import confs.Configuration
 import envs.EnvContainer.{ZEnvConfLogCache, ZEnvConfLogCacheLayer}
 import zio.logging._
 import zio.console.putStrLn
@@ -21,9 +21,7 @@ object Main extends App {
     for {
       _ <- log.info("Web service starting")
       _ <- checkArgs(args)
-      cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
-      //configService <- ZIO.access[Configuration](_.config)
-      //cfg = configService.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
+      cfg <- ZIO.access[Configuration](_.get.load("C:\\ws_fphp\\src\\main\\resources\\application.conf"))
       res <- WebService.startService(cfg)
       _ <- log.info("Web service stopping")
     } yield res

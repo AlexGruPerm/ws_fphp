@@ -7,14 +7,15 @@ import akka.http.scaladsl._
 import akka.http.scaladsl.model.{HttpRequest, _}
 import akka.util.Timeout
 import envs.EnvContainer.IncConnSrvBind
-import confs.{Config, DbConfig}
 import dbconn.PgConnection
 import envs.EnvContainer.ZEnvLogCache
 import zio.logging.log
 import zio.{Runtime, _}
+
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.language.postfixOps
 import CacheHelper._
+import envs.{Config, DbConfig}
 
 object WebService {
 
@@ -26,12 +27,13 @@ object WebService {
    * https://medium.com/@ghostdogpr/combining-zio-and-akka-to-enable-distributed-fp-in-scala-61ffb81e3283
    *
    */
-  val startService: Config => ZIO[ZEnvLogCache, Throwable, Unit] = conf => {
+  val startService: Task[Config] => ZIO[ZEnvLogCache, Throwable, Unit] = confInstance => {
     import zio.duration._
     Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
         for {
           _ <- CacheLog.out("WsServer",true)
+          conf <- confInstance
           thisConnection = PgConnection(conf.dbListenConfig)
           fiber <- startRequestHandler(conf, actorSystem).forkDaemon
           _ <- fiber.join

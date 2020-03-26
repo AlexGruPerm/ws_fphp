@@ -4,10 +4,10 @@ import java.sql.Types
 import java.util.concurrent.TimeUnit
 import java.util.NoSuchElementException
 
-import confs.DbConfig
-import data.{ CacheEntity, DictDataRows, DictRow}
+import data.{CacheEntity, DictDataRows, DictRow}
 import envs.CacheAsZLayer.CacheManager
-import envs.EnvContainer.{ZEnvLogCache}
+import envs.DbConfig
+import envs.EnvContainer.ZEnvLogCache
 import io.circe.Printer
 import org.postgresql.jdbc.PgResultSet
 import io.circe.generic.auto._
@@ -15,7 +15,7 @@ import io.circe.syntax._
 import org.postgresql.util.PSQLException
 import reqdata.Dict
 import zio.{IO, Task, ZIO, clock}
-import zio.logging.{log}
+import zio.logging.log
 
 
 object DbExecutor {
