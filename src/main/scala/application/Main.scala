@@ -17,19 +17,19 @@ object Main extends App {
 
 
 
-  private def wsApp: (List[String],Runtime.Managed[ZEnvLogCache]) => ZIO[ZEnvLogCache, Throwable, Unit] = (args,rt) =>
+  private def wsApp: List[String] => ZIO[ZEnvLogCache, Throwable, Unit] = args =>
     for {
       _ <- log.info("Web service starting")
       _ <- checkArgs(args)
       cfg <- Configuration.config.load("C:\\ws_fphp\\src\\main\\resources\\application.conf")
-      res <- WsServObj.WsServer(cfg, rt)
+      res <- WsServObj.WsServer(cfg)
       _ <- log.info("Web service stopping!")
     } yield res
 
   override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] = {
     val appLayer: Layer[Nothing, ZEnvLogCache] = ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer
     val rt: Runtime.Managed[ZEnvLogCache]  = Runtime.unsafeFromLayer(appLayer)
-    ZIO(rt.unsafeRun(wsApp(args,rt))).foldM(throwable => putStrLn(s"Error: ${throwable.getMessage}") *>
+    ZIO(rt.unsafeRun(wsApp(args))).foldM(throwable => putStrLn(s"Error: ${throwable.getMessage}") *>
       ZIO.foreach(throwable.getStackTrace) { sTraceRow =>
         putStrLn(s"$sTraceRow")
       } as 1,
