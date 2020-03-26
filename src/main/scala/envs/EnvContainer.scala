@@ -5,6 +5,7 @@ import zio.clock.Clock
 import zio.console.Console
 import CacheAsZLayer._
 import akka.http.scaladsl.Http.{IncomingConnection, ServerBinding}
+import envs.ConfAsZLayer.Configuration
 import zio.logging.Logging
 import zio.logging.Logging.Logging
 
@@ -16,6 +17,7 @@ object EnvContainer {
 
   type ZEnvLog = ZEnv with Logging
   type ZEnvLogCache =  ZEnvLog with CacheManager
+  type ZEnvConfLogCache =  ZEnvLogCache with Configuration
 
    val env: ZLayer[Console with Clock, Nothing, Logging]   =
     Logging.console((_, logEntry) =>
@@ -26,5 +28,8 @@ object EnvContainer {
 
   val ZEnvLogCacheLayer: ZLayer[ZEnv, Nothing, ZEnvLogCache] =
     ZEnv.live ++ env /*++ ZEnv.live*/ ++ CacheManager.refCache
+
+  val ZEnvConfLogCacheLayer: ZLayer[ZEnv, Nothing, ZEnvConfLogCache] =
+    ZEnv.live ++ env /*++ ZEnv.live*/ ++ Configuration.wsConf ++ CacheManager.refCache
 
 }
