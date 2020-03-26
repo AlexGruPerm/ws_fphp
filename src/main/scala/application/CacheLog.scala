@@ -1,6 +1,6 @@
 package application
 
-import envs.CacheZLayerObject.CacheManager
+import envs.CacheAsZLayer.CacheManager
 import envs.EnvContainer.ZEnvLogCache
 import zio._
 import zio.logging.log

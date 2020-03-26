@@ -6,7 +6,7 @@ import java.util.NoSuchElementException
 
 import confs.DbConfig
 import data.{ CacheEntity, DictDataRows, DictRow}
-import envs.CacheZLayerObject.CacheManager
+import envs.CacheAsZLayer.CacheManager
 import envs.EnvContainer.{ZEnvLogCache}
 import io.circe.Printer
 import org.postgresql.jdbc.PgResultSet

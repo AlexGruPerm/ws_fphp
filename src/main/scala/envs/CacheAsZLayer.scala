@@ -3,7 +3,7 @@ package envs
 import data.{Cache, CacheEntity, DictDataRows}
 import zio.{Has, Ref, Tagged, UIO, ZLayer}
 
-object CacheZLayerObject {
+object CacheAsZLayer {
   //#1
   type CacheManager = Has[CacheManager.Service]
   //#2

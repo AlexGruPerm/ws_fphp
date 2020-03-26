@@ -3,7 +3,7 @@ package envs
 import zio.{ZEnv, ZLayer}
 import zio.clock.Clock
 import zio.console.Console
-import CacheZLayerObject._
+import CacheAsZLayer._
 import akka.http.scaladsl.Http.{IncomingConnection, ServerBinding}
 import zio.logging.Logging
 import zio.logging.Logging.Logging

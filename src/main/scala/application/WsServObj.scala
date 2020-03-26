@@ -16,9 +16,9 @@ import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.language.postfixOps
 import CacheHelper._
 
-object WsServObj {
+object WebService {
 
-  //private val notifTimeout: Int = 3000 if listener connection is locked or not response
+  private val notifTimeout: Int = 3000
 
   /**
    * Read config file and open Http server.
@@ -26,27 +26,21 @@ object WsServObj {
    * https://medium.com/@ghostdogpr/combining-zio-and-akka-to-enable-distributed-fp-in-scala-61ffb81e3283
    *
    */
-  val WsServer: Config => ZIO[ZEnvLogCache, Throwable, Unit] = conf => {
+  val startService: Config => ZIO[ZEnvLogCache, Throwable, Unit] = conf => {
     import zio.duration._
-    val wsRes = Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
+    Managed.make(Task(ActorSystem("WsDb")))(sys => Task.fromFuture(_ => sys.terminate()).ignore).use(
       actorSystem =>
         for {
           _ <- CacheLog.out("WsServer",true)
-
+          thisConnection = PgConnection(conf.dbListenConfig)
           fiber <- startRequestHandler(conf, actorSystem).forkDaemon
           _ <- fiber.join
-
-          thisConnection = PgConnection(conf.dbListenConfig)
-
           cacheCheckerValidation <- cacheValidator(conf.dbListenConfig, thisConnection)
             .repeat(Schedule.spaced(3.second)).forkDaemon *>
             cacheChecker.repeat(Schedule.spaced(2.second)).forkDaemon
           _ <- cacheCheckerValidation.join
-
-          _ <- log.info("After startRequestHandler, end of WsServer.")
         } yield ()
     )
-    wsRes
   }
 
 

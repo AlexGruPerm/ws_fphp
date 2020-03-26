@@ -15,7 +15,7 @@ lazy val Versions = new {
   val zioLogSlf4j = "0.2.5"
   val dbcp2Vers = "2.7.0"
   val jschVers = "0.1.55"
-  val zioPureConf = "0.12.2"
+  val zioPureConf = "0.12.3"
   val typeSefeConf = "1.4.0"
 }
 
