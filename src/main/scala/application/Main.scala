@@ -2,20 +2,20 @@ package application
 
 import zio.{App, Layer, Runtime, Task, UIO, ZEnv, ZIO}
 import confs.Configuration
-import envs.EnvContainer.{ZEnvLog, ZEnvLogCache}
+import envs.EnvContainer.{ZEnvLogCache}
 import zio.logging._
 import zio.console.putStrLn
 
 object Main extends App {
 
-  private def checkArgs : List[String] => ZIO[ZEnv,Throwable,Unit] = args => for {
+  private def checkArgs: List[String] => ZIO[ZEnv, Throwable, Unit] = args => for {
     checkRes <- if (args.length < 0) {
-      Task.fail(new IllegalArgumentException("Need config file as parameter."))}
-    else {UIO.succeed(())
+      Task.fail(new IllegalArgumentException("Need config file as parameter."))
+    }
+    else {
+      UIO.succeed(())
     }
   } yield checkRes
-
-
 
   private def wsApp: List[String] => ZIO[ZEnvLogCache, Throwable, Unit] = args =>
     for {
@@ -28,15 +28,14 @@ object Main extends App {
 
   override def run(args: List[String]): ZIO[ZEnv, Nothing, Int] = {
     val appLayer: Layer[Nothing, ZEnvLogCache] = ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer
-    val rt: Runtime.Managed[ZEnvLogCache]  = Runtime.unsafeFromLayer(appLayer)
+    val rt: Runtime.Managed[ZEnvLogCache] = Runtime.unsafeFromLayer(appLayer)
     ZIO(rt.unsafeRun(wsApp(args))).foldM(throwable => putStrLn(s"Error: ${throwable.getMessage}") *>
       ZIO.foreach(throwable.getStackTrace) { sTraceRow =>
         putStrLn(s"$sTraceRow")
       } as 1,
-      _ =>  putStrLn(s"Success exit of application.") as 0
+      _ => putStrLn(s"Success exit of application.") as 0
     )
   }
-
 
 }
 
