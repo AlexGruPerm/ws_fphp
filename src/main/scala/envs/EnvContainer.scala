@@ -27,9 +27,9 @@ object EnvContainer {
   val ZEnvLogLayer:  ZLayer[ZEnv, Nothing, ZEnvLog] = ZEnv.live ++ env
 
   val ZEnvLogCacheLayer: ZLayer[ZEnv, Nothing, ZEnvLogCache] =
-    ZEnv.live ++ env /*++ ZEnv.live*/ ++ CacheManager.refCache
+    ZEnv.live ++ env ++ CacheManager.refCache
 
   val ZEnvConfLogCacheLayer: ZLayer[ZEnv, Nothing, ZEnvConfLogCache] =
-    ZEnv.live ++ env /*++ ZEnv.live*/ ++ Configuration.wsConf ++ CacheManager.refCache
+    ZEnv.live ++ env ++ Configuration.wsConf ++ CacheManager.refCache
 
 }
