@@ -2,14 +2,14 @@ package application
 
 import zio.{App, Layer, Runtime, Task, UIO, ZEnv, ZIO}
 import confs.Configuration
-import envs.EnvContainer.{ZEnvLogCache}
+import envs.EnvContainer.ZEnvLogCache
 import zio.logging._
 import zio.console.putStrLn
 
 object Main extends App {
 
   private def checkArgs: List[String] => ZIO[ZEnv, Throwable, Unit] = args => for {
-    checkRes <- if (args.length < 0) {
+    checkRes <- if (args.isEmpty) {
       Task.fail(new IllegalArgumentException("Need config file as parameter."))
     }
     else {
