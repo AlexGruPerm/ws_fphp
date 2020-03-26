@@ -1,9 +1,7 @@
 package application
 
 import java.io.{File, IOException}
-import java.sql.{Connection, Types}
-import java.util.concurrent.TimeUnit
-import java.util.{NoSuchElementException, Properties}
+
 
 import akka.http.javadsl.model.headers.AcceptEncoding
 import akka.http.scaladsl.coding.Gzip
@@ -15,8 +13,8 @@ import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCo
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
-import data.{Cache, CacheEntity, DbErrorDesc, DictDataRows, DictRow, DictsDataAccum, RequestResult}
-import dbconn.{DbExecutor, PgConnection}
+import data.{DbErrorDesc, DictsDataAccum, RequestResult}
+import dbconn.{DbExecutor}
 import envs.CacheAsZLayer.CacheManager
 import envs.DbConfig
 import envs.EnvContainer.{ZEnvLog, ZEnvLogCache}
@@ -26,20 +24,14 @@ import io.circe.{Decoder, Encoder, Json, Printer}
 import io.circe.syntax._
 import zio.{Cause, IO, Ref, Schedule, Task, UIO, URIO, ZEnv, ZIO}
 import zio.console.putStrLn
-import zio.logging.{LogLevel, Logging, log}
 
 import scala.concurrent.{Await, Future}
 import scala.io.{BufferedSource, Source}
 import scala.language.postfixOps
-import io.circe.syntax._
 import org.postgresql.jdbc.PgResultSet
 import reqdata.{Dict, NoConfigureDbInRequest, ReqParseException, RequestData}
-import zio.clock.Clock
-import io.circe.generic.JsonCodec
 import testsjsons.CollectJsons
-import zio.logging.{LogLevel, Logging, log}
-
-import scala.util.{Failure, Success, Try}
+import zio.logging.log
 
 
 /**
@@ -60,7 +52,7 @@ object ReqResp {
     _ <- log.trace("  ---------- HEADER ---------")
     _ <- URIO.foreach(request.headers.zipWithIndex)(hdr => log.trace(s"   #${hdr._2} : ${hdr._1.toString}"))
     _ <- log.trace(s"  ---------------------------")
-    //_ <- log.trace(s"entity ${request.entity.toString} ") todo: open ???
+    //_ <- log.trace(s"entity ${request.entity.toString} ")
     _ <- log.trace("========================================================")
   } yield ()
 
@@ -73,12 +65,14 @@ object ReqResp {
     _ <- log.trace(s"dicts size = ${rd.dicts.size}")
     _ <- URIO.foreach(rd.dicts) { d =>
       log.trace(s"dict = ${d.db} - ${d.proc} ")
+      /*
       for {
         _ <- log.trace(s" ref tables in dict : ${d.reftables.getOrElse(Seq()).size} ")
         _ <- URIO.foreach(d.reftables.getOrElse(Seq())) { tableName =>
           log.trace(s"  reftable = $tableName ")
         }
       } yield URIO.unit
+      */
     }
     _ <- log.trace("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
   } yield ()
@@ -166,9 +160,9 @@ object ReqResp {
           s"bornTs = ${cv.cacheCreatedTs}")
         _ <- cache.addHeartbeat
 
-        //_ <- logRequest(request) todo: open it
+        _ <- logRequest(request)
         reqRequestData = parseRequestData(reqEntity)
-        //_ <- logReqData(reqRequestData) todo: open it
+        _ <- logReqData(reqRequestData)
         seqResDicts <- reqRequestData
         //check that all requested db are configures.
         resString :ByteString <- dictDbsCheckInConfig(reqRequestData, configuredDbList)
@@ -178,7 +172,7 @@ object ReqResp {
                 DbErrorDesc("error", checkErr.getMessage, "Cause of exception", checkErr.getClass.getName).asJson
               Task(compress(seqResDicts.cont_encoding_gzip_enabled, Printer.spaces2.print(failJson)))
             },
-            checkOk =>
+            _ =>
               for {
                 str <- ZIO.foreachPar(seqResDicts.dicts) {
                   thisDict =>
@@ -227,18 +221,15 @@ object ReqResp {
     UIO.unit
 
   //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
-  val routeGetDebug: (HttpRequest) => ZIO[ZEnvLog, Throwable, HttpResponse] = request => for {
-    strDebugForm <- openFile(
-      "C:\\ws_fphp\\src\\main\\resources\\debug_post.html"
-      //"C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\debug_post.html"
-      //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
-    ).bracket(closeFile) { file =>
-      Task(file.getLines.mkString.replace("req_json_text", CollectJsons.reqJsonText_))
+  val routeGetDebug: HttpRequest => ZIO[ZEnvLog, Throwable, HttpResponse] = request => for {
+    strDebugForm <- openFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").bracket(closeFile) {
+      file =>Task(file.getLines.mkString.replace("req_json_text", CollectJsons.reqJsonText_))
     }
     _ <- logRequest(request)
 
     f <- ZIO.fromFuture { implicit ec =>
-      Future.successful(HttpResponse(StatusCodes.OK, entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)))
+      Future.successful(
+        HttpResponse(StatusCodes.OK, entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)))
         .flatMap {
           result: HttpResponse => Future(result).map(_ => result)
         }
@@ -248,7 +239,6 @@ object ReqResp {
 
   val routeGetFavicon: HttpRequest => ZIO[ZEnvLog, Throwable, HttpResponse] = request => for {
     _ <- putStrLn(s"================= ${request.method} REQUEST ${request.protocol.value} =============")
-    //icoFile <- Task{new File("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/favicon.png")}
     icoFile <- Task{new File("C:\\ws_fphp\\src\\main\\resources\\favicon.png")}
     f <- ZIO.fromFuture { implicit ec =>
       Future.successful(
