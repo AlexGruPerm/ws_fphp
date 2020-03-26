@@ -2,7 +2,7 @@ package application
 
 import envs.ConfAsZLayer.Configuration
 import zio.{App, Layer, Runtime, Task, UIO, ZEnv, ZIO}
-import envs.EnvContainer.{ZEnvConfLogCache, ZEnvConfLogCacheLayer}
+import envs.EnvContainer.ZEnvConfLogCache
 import zio.logging._
 import zio.console.putStrLn
 

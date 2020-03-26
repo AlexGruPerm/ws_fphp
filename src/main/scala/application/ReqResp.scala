@@ -1,35 +1,25 @@
 package application
 
 import java.io.{File, IOException}
-
-
-import akka.http.javadsl.model.headers.AcceptEncoding
-import akka.http.scaladsl.coding.Gzip
 import akka.http.scaladsl.model.HttpCharsets._
 import akka.http.scaladsl.model.MediaTypes.{`application/json`, `text/html`}
-import akka.http.scaladsl.model.TransferEncodings.gzip
 import akka.http.scaladsl.model.headers.`Content-Encoding`
-import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes, _}
-import akka.stream.ActorMaterializer
+import akka.http.scaladsl.model.HttpRequest
 import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
 import data.{DbErrorDesc, DictsDataAccum, RequestResult}
-import dbconn.{DbExecutor}
+import dbconn.DbExecutor
 import envs.CacheAsZLayer.CacheManager
 import envs.DbConfig
 import envs.EnvContainer.{ZEnvLog, ZEnvLogCache}
-import io.circe.generic.JsonCodec
 import io.circe.parser.parse
-import io.circe.{Decoder, Encoder, Json, Printer}
-import io.circe.syntax._
-import zio.{Cause, IO, Ref, Schedule, Task, UIO, URIO, ZEnv, ZIO}
+import io.circe.Printer
+import zio.{IO, Task, UIO, URIO, ZIO}
 import zio.console.putStrLn
-
 import scala.concurrent.{Await, Future}
 import scala.io.{BufferedSource, Source}
 import scala.language.postfixOps
-import org.postgresql.jdbc.PgResultSet
-import reqdata.{Dict, NoConfigureDbInRequest, ReqParseException, RequestData}
+import reqdata.{NoConfigureDbInRequest, ReqParseException, RequestData}
 import testsjsons.CollectJsons
 import zio.logging.log
 
@@ -90,13 +80,13 @@ object ReqResp {
    *  "exception class" : "PSQLException"
    * }
   */
-  import akka.http.scaladsl.coding.{Encoder, Gzip }
+  import akka.http.scaladsl.coding.Gzip
   import akka.http.scaladsl.model._, headers.HttpEncodings
 
   private def compress(usingGzip: Int, input: String) :ByteString =
     if (usingGzip==1) Gzip.encode(ByteString(input)) else ByteString(input)
 
-  import io.circe.generic.auto._, io.circe.syntax._
+  import io.circe.syntax._
   import scala.concurrent.duration._
   private val parseRequestData: Future[String] => Task[RequestData] = futString => {
     val strRequest: String  = Await.result(futString, 3 second)

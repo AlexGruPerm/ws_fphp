@@ -9,10 +9,7 @@ import data.{CacheEntity, DictDataRows, DictRow}
 import envs.CacheAsZLayer.CacheManager
 import envs.DbConfig
 import envs.EnvContainer.ZEnvLogCache
-import io.circe.Printer
 import org.postgresql.jdbc.PgResultSet
-import io.circe.generic.auto._
-import io.circe.syntax._
 import org.postgresql.util.PSQLException
 import reqdata.Dict
 import zio.{IO, Task, ZIO, clock}
