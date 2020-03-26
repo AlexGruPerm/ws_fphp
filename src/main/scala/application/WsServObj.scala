@@ -189,7 +189,7 @@ object WsServObj {
   /**
    * dbConfigList are registered list of databases from config file - application.conf
   */
-  def reqHandlerM(dbConfigList: DbConfig, actorSystem: ActorSystem, rt: Runtime.Managed[ZEnvLogCache])(request: HttpRequest):
+  def reqHandlerM(dbConfigList: DbConfig, actorSystem: ActorSystem, rt: Runtime[ZEnvLogCache])(request: HttpRequest):
   Future[HttpResponse] = {
     implicit val system: ActorSystem = actorSystem
 
@@ -261,11 +261,13 @@ object WsServObj {
             l: Layer[Nothing, ZEnvLogCache] = ZEnv.live >>> envs.EnvContainer.ZEnvLogCacheLayer
             rt: Runtime.Managed[ZEnvLogCache]  = Runtime.unsafeFromLayer(l)
             */
-            rti <- ZIO.runtime[ZEnvLogCache]
+
+            rti :Runtime[ZEnvLogCache] <- ZIO.runtime[ZEnvLogCache]
+
 
         ss: Source[Http.IncomingConnection, Future[ServerBinding]] <- serverSource(conf,actorSystem)
         _ <- log.info("ServerSource created")
-        reqHandlerFinal <- RIO(reqHandlerM(conf.dbConfig, actorSystem, rt) _)
+        reqHandlerFinal <- RIO(reqHandlerM(conf.dbConfig, actorSystem, rti) _)
 
             /*
         requestHandlerFunc: RIO[HttpRequest, Future[HttpResponse]] = ZIO.fromFunction(
