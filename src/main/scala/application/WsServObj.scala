@@ -1,30 +1,21 @@
 package application
 
-import java.util.concurrent.Executors
-
 import akka.Done
 import akka.actor.ActorSystem
-import akka.http.scaladsl.Http.{IncomingConnection, ServerBinding}
+import akka.http.scaladsl.Http.ServerBinding
 import akka.http.scaladsl._
 import akka.http.scaladsl.model.{HttpRequest, _}
-import akka.http.scaladsl.settings.{ClientConnectionSettings, ConnectionPoolSettings}
-import akka.util.{ByteString, Timeout}
+import akka.util.Timeout
 import envs.EnvContainer.IncConnSrvBind
 import confs.{Config, DbConfig}
-import data.{Cache, CacheEntity, DictDataRows}
-import dbconn.{PgConnection, pgSess, pgSessListen}
-import envs.CacheZLayerObject.CacheManager
-import envs.EnvContainer
-import envs.EnvContainer.{ZEnvLog, ZEnvLogCache}
-import org.postgresql.PGNotification
-import zio.logging.{LogLevel, Logging, log}
-import zio.{Layer, Runtime, _}
-import scala.Option
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
+import dbconn.PgConnection
+import envs.EnvContainer.ZEnvLogCache
+import zio.logging.log
+import zio.{Runtime, _}
+import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.language.postfixOps
 import CacheHelper._
 
-//ex of using Ref for cache. https://stackoverflow.com/questions/57252919/scala-zio-ref-datatype
 object WsServObj {
 
   //private val notifTimeout: Int = 3000 if listener connection is locked or not response
@@ -55,11 +46,6 @@ object WsServObj {
           _ <- log.info("After startRequestHandler, end of WsServer.")
         } yield ()
     )
-
-    /** examples:
-     * reqHandlerResult <- startRequestHandler(conf, actorSystem).flatMap(_ => ZIO.never)
-     * //_  <- UIO.succeed(()).repeat(Schedule.spaced(1.second))
-     */
     wsRes
   }
 
