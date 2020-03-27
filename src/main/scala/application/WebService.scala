@@ -34,13 +34,17 @@ object WebService {
         for {
           _ <- CacheLog.out("WsServer",true)
           conf <- confInstance
-          thisConnection = PgConnection(conf.dbListenConfig)
+
           fiber <- startRequestHandler(conf, actorSystem).forkDaemon
           _ <- fiber.join
-          cacheCheckerValidation <- cacheValidator(conf.dbListenConfig, thisConnection)
+
+          thisConnection = PgConnection(conf.dbListenConfig)
+
+          cacheCheckerValidator <- cacheValidator(conf.dbListenConfig, thisConnection)
             .repeat(Schedule.spaced(3.second)).forkDaemon *>
             cacheChecker.repeat(Schedule.spaced(2.second)).forkDaemon
-          _ <- cacheCheckerValidation.join //todo: may be divide on 2 separate forkDeamon
+
+          _ <- cacheCheckerValidator.join //todo: may be divide on 2 separate forkDeamon
         } yield ()
     )
   }

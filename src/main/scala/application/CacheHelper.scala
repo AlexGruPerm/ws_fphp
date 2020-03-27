@@ -66,7 +66,7 @@ object CacheHelper {
    * FOR EACH statement EXECUTE PROCEDURE notify_change();
    *
    */
-   val cacheValidator: (DbConfig, PgConnection) => ZIO[ZEnvLogCache, Throwable, Unit] = (conf, pgsessSrc) => {
+  val cacheValidator: (DbConfig, PgConnection) => ZIO[ZEnvLogCache, Throwable, Unit] = (conf, pgsessSrc) => {
     import zio.duration._
     for {
       pgsessLs <- pgsessSrc.sess orElse
