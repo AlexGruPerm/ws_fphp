@@ -4,7 +4,7 @@ import data.CacheEntity
 import dbconn.PgConnection
 import envs.CacheAsZLayer.CacheManager
 import envs.DbConfig
-import envs.EnvContainer.ZEnvLogCache
+import envs.EnvContainer.{ZEnvLog, ZEnvLogCache}
 import org.postgresql.PGNotification
 import zio.{Schedule, UIO, ZIO}
 import zio.logging.log
@@ -33,6 +33,23 @@ object CacheHelper {
       _ <- cache.remove(foundKeys)
     } yield ()
 
+
+  val cacheCleaner: Array[PGNotification] => ZIO[ZEnvLogCache, Nothing, Unit] = notifications =>
+    for {
+      _ <- ZIO.foreach(notifications) { nt =>
+        if (nt.getName == "change") {
+          for {
+            _ <- log.info(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
+            _ <- removeFromCacheByRefTable(nt.getParameter)
+          } yield UIO.succeed(())
+        } else {
+          UIO.succeed(())
+        }
+      }.catchAllCause {
+        e => log.error(s" cacheValidator Exception $e")
+      }
+    } yield ()
+
   /**
    **
    *CREATE OR REPLACE FUNCTION notify_change() RETURNS TRIGGER AS $$
@@ -56,23 +73,13 @@ object CacheHelper {
         PgConnection(conf).sess.retry(Schedule.recurs(3) && Schedule.spaced(2.seconds))
       _ <- log.info(s"DB Listener PID = ${pgsessLs.pid}")
       notifications = scala.Option(pgsessLs.sess.getNotifications).getOrElse(Array[PGNotification]()) //timeout
+
       _ <- if (notifications.nonEmpty) {
-        log.info(s"notifications size = ${notifications.size}")
+        log.trace(s"notifications size = ${notifications.size}")
       } else {
-        log.trace(s"notifications size = 0")
+        UIO.succeed()
       }
-      _ <- ZIO.foreach(notifications) { nt =>
-        if (nt.getName == "change") {
-          for {
-            _ <- log.info(s"Notif: name = ${nt.getName} pid = ${nt.getPID} parameter = ${nt.getParameter}")
-            _ <- removeFromCacheByRefTable(nt.getParameter)
-          } yield UIO.succeed(())
-        } else {
-          UIO.succeed(())
-        }
-      }.catchAllCause {
-        e => log.error(s" cacheValidator Exception $e")
-      }
+      _ <- cacheCleaner(notifications)
     } yield ()
   }
 

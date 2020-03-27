@@ -40,7 +40,7 @@ object WebService {
           cacheCheckerValidation <- cacheValidator(conf.dbListenConfig, thisConnection)
             .repeat(Schedule.spaced(3.second)).forkDaemon *>
             cacheChecker.repeat(Schedule.spaced(2.second)).forkDaemon
-          _ <- cacheCheckerValidation.join
+          _ <- cacheCheckerValidation.join //todo: may be divide on 2 separate forkDeamon
         } yield ()
     )
   }

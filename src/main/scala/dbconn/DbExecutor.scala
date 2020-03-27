@@ -82,8 +82,9 @@ object DbExecutor {
     (configuredDb, trqDict) =>
       for {
         cache <- ZIO.access[CacheManager](_.get)
-        cv <- cache.getCacheValue
-        _ <- log.trace(s"getDict HeartbeatCounter = ${cv.HeartbeatCounter} ")
+        //todo: remove this 2 outputs.
+        //cv <- cache.getCacheValue
+        //_ <- log.trace(s"getDict HeartbeatCounter = ${cv.HeartbeatCounter} ")
         valFromCache: Option[CacheEntity] <- cache.get(trqDict.hashCode())
         dictRows <- valFromCache match {
           case Some(s: CacheEntity) =>
