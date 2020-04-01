@@ -37,7 +37,7 @@ object foo {
         CacheManager.Service[K, V]
       ] {
         //UIO(new RefCache[K, V])
-        Ref.make(Map.empty[K, V]).map(refEmpty => new RefCache[K, V](refEmpty))
+        Ref.make(Map.empty[K, V]).map(new RefCache[K, V](_))
       }
     }
 
@@ -59,8 +59,7 @@ object MyApp extends App {
       _ <- c.set(3,"String 3")
       v <- c.get(2)
       _ <- putStrLn(s" for key = 2 value = [$v]")
-      res <- Task.unit
-    } yield res
+    } yield ()
 
   def run(args: List[String]): ZIO[ZEnv, Nothing, Int] =
     WsApp(args).provideCustomLayer(myenv).fold(_ => 1, _ => 0)
@@ -69,3 +68,4 @@ object MyApp extends App {
 
 val runtime = Runtime.default
 runtime.unsafeRun(MyApp.run(List()).provideLayer(MyApp.myenv))
+
