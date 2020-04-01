@@ -1,44 +1,27 @@
 package application
 
 import java.io.{File, IOException}
-import java.sql.{Connection, Types}
-import java.util.concurrent.TimeUnit
-import java.util.{NoSuchElementException, Properties}
-
-import akka.http.javadsl.model.headers.AcceptEncoding
-import akka.http.scaladsl.coding.Gzip
 import akka.http.scaladsl.model.HttpCharsets._
 import akka.http.scaladsl.model.MediaTypes.{`application/json`, `text/html`}
-import akka.http.scaladsl.model.TransferEncodings.gzip
 import akka.http.scaladsl.model.headers.`Content-Encoding`
-import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes, _}
-import akka.stream.ActorMaterializer
+import akka.http.scaladsl.model.HttpRequest
 import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
-import confs.{Config, DbConfig}
-import data.{Cache, CacheEntity, DbErrorDesc, DictDataRows, DictRow, DictsDataAccum, RequestResult}
-import dbconn.{DbExecutor, PgConnection}
-import envs.EnvContainer.ZEnvLog
-import io.circe.generic.JsonCodec
+import data.{DbErrorDesc, DictsDataAccum, RequestResult}
+import dbconn.DbExecutor
+import envs.CacheAsZLayer.CacheManager
+import envs.DbConfig
+import envs.EnvContainer.{ZEnvLog, ZEnvLogCache}
 import io.circe.parser.parse
-import io.circe.{Decoder, Encoder, Json, Printer}
-import io.circe.syntax._
-import zio.{Cause, IO, Ref, Schedule, Task, UIO, URIO, ZEnv, ZIO}
+import io.circe.Printer
+import zio.{IO, Task, UIO, URIO, ZIO}
 import zio.console.putStrLn
-import zio.logging.{LogLevel, Logging, log}
-
 import scala.concurrent.{Await, Future}
 import scala.io.{BufferedSource, Source}
 import scala.language.postfixOps
-import io.circe.syntax._
-import org.postgresql.jdbc.PgResultSet
-import reqdata.{Dict, NoConfigureDbInRequest, ReqParseException, RequestData}
-import zio.clock.Clock
-import io.circe.generic.JsonCodec
+import reqdata.{NoConfigureDbInRequest, ReqParseException, RequestData}
 import testsjsons.CollectJsons
-import zio.logging.{LogLevel, Logging, log, logError, logInfo, logTrace}
-
-import scala.util.{Failure, Success, Try}
+import zio.logging.log
 
 
 /**
@@ -54,32 +37,34 @@ object ReqResp {
   val pnf:Int = 404
 
   val logRequest: HttpRequest => ZIO[ZEnvLog, Throwable, Unit] = request => for {
-    _ <- logTrace(s"================= ${request.method} REQUEST ${request.protocol.value} =====")
-    _ <- logTrace(s"uri : ${request.uri} ")
-    _ <- logTrace("  ---------- HEADER ---------")
-    _ <- URIO.foreach(request.headers.zipWithIndex)(hdr => logTrace(s"   #${hdr._2} : ${hdr._1.toString}"))
-    _ <- logTrace(s"  ---------------------------")
-    _ <- logTrace(s"entity ${request.entity.toString} ")
-    _ <- logTrace("========================================================")
+    _ <- log.trace(s"================= ${request.method} REQUEST ${request.protocol.value} =====")
+    _ <- log.trace(s"uri : ${request.uri} ")
+    _ <- log.trace("  ---------- HEADER ---------")
+    _ <- URIO.foreach(request.headers.zipWithIndex)(hdr => log.trace(s"   #${hdr._2} : ${hdr._1.toString}"))
+    _ <- log.trace(s"  ---------------------------")
+    //_ <- log.trace(s"entity ${request.entity.toString} ")
+    _ <- log.trace("========================================================")
   } yield ()
 
 
   val logReqData: Task[RequestData] => ZIO[ZEnvLog, Throwable, Unit] = reqData => for {
     rd <- reqData
-    _ <- logTrace("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-    _ <- logTrace(s"session_id = ${rd.user_session}")
-    _ <- logTrace(s"encoding_gzip = ${rd.cont_encoding_gzip_enabled}")
-    _ <- logTrace(s"dicts size = ${rd.dicts.size}")
+    _ <- log.trace("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+    _ <- log.trace(s"session_id = ${rd.user_session}")
+    _ <- log.trace(s"encoding_gzip = ${rd.cont_encoding_gzip_enabled}")
+    _ <- log.trace(s"dicts size = ${rd.dicts.size}")
     _ <- URIO.foreach(rd.dicts) { d =>
-      logTrace(s"dict = ${d.db} - ${d.proc} ")
+      log.trace(s"dict = ${d.db} - ${d.proc} ")
+      /*
       for {
-        _ <- logTrace(s" ref tables in dict : ${d.reftables.getOrElse(Seq()).size} ")
+        _ <- log.trace(s" ref tables in dict : ${d.reftables.getOrElse(Seq()).size} ")
         _ <- URIO.foreach(d.reftables.getOrElse(Seq())) { tableName =>
-          logTrace(s"  reftable = $tableName ")
+          log.trace(s"  reftable = $tableName ")
         }
       } yield URIO.unit
+      */
     }
-    _ <- logTrace("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+    _ <- log.trace("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
   } yield ()
 
   /**
@@ -95,13 +80,13 @@ object ReqResp {
    *  "exception class" : "PSQLException"
    * }
   */
-  import akka.http.scaladsl.coding.{Encoder, Gzip }
+  import akka.http.scaladsl.coding.Gzip
   import akka.http.scaladsl.model._, headers.HttpEncodings
 
   private def compress(usingGzip: Int, input: String) :ByteString =
     if (usingGzip==1) Gzip.encode(ByteString(input)) else ByteString(input)
 
-  import io.circe.generic.auto._, io.circe.syntax._
+  import io.circe.syntax._
   import scala.concurrent.duration._
   private val parseRequestData: Future[String] => Task[RequestData] = futString => {
     val strRequest: String  = Await.result(futString, 3 second)
@@ -154,11 +139,17 @@ object ReqResp {
 
       } yield checkResult //UIO.succeed(())
 
-  import zio.blocking._
-
-  lazy val routeDicts: (HttpRequest, Ref[Cache], DbConfig, Future[String]) => ZIO[ZEnvLog, Throwable, HttpResponse] =
-    (request, cache, configuredDbList, reqEntity) =>
+    import zio.blocking._
+    val routeDicts: (HttpRequest, DbConfig, Future[String]) => ZIO[ZEnvLogCache, Throwable, HttpResponse] =
+      (request, configuredDbList, reqEntity) =>
       for {
+        cache <- ZIO.access[CacheManager](_.get)
+        cv <- cache.getCacheValue
+        _ <- log.trace("==========================================")
+        _ <- log.trace(s"START - routeDicts HeartbeatCounter = ${cv.HeartbeatCounter} " +
+          s"bornTs = ${cv.cacheCreatedTs}")
+        _ <- cache.addHeartbeat
+
         _ <- logRequest(request)
         reqRequestData = parseRequestData(reqEntity)
         _ <- logReqData(reqRequestData)
@@ -171,16 +162,16 @@ object ReqResp {
                 DbErrorDesc("error", checkErr.getMessage, "Cause of exception", checkErr.getClass.getName).asJson
               Task(compress(seqResDicts.cont_encoding_gzip_enabled, Printer.spaces2.print(failJson)))
             },
-            checkOk =>
+            _ =>
               for {
                 str <- ZIO.foreachPar(seqResDicts.dicts) {
                   thisDict =>
                     if (seqResDicts.thread_pool == "block") {
                       //run in separate blocking pool, "unlimited" thread count
-                      blocking(DbExecutor.getDict(configuredDbList, thisDict, cache))
+                      blocking(DbExecutor.getDict(configuredDbList, thisDict))
                     } else {
                       //run on sync pool, count of threads equal CPU.cores*2 (cycle)
-                      DbExecutor.getDict(configuredDbList, thisDict, cache)
+                      DbExecutor.getDict(configuredDbList, thisDict)
                     }
                 }.fold(
                   err => compress(seqResDicts.cont_encoding_gzip_enabled,
@@ -220,18 +211,15 @@ object ReqResp {
     UIO.unit
 
   //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
-  val routeGetDebug: (HttpRequest) => ZIO[ZEnvLog, Throwable, HttpResponse] = request => for {
-    strDebugForm <- openFile(
-      "C:\\ws_fphp\\src\\main\\resources\\debug_post.html"
-      //"C:\\PROJECTS\\ws_fphp\\src\\main\\resources\\debug_post.html"
-      //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
-    ).bracket(closeFile) { file =>
-      Task(file.getLines.mkString.replace("req_json_text", CollectJsons.reqJsonText_))
+  val routeGetDebug: HttpRequest => ZIO[ZEnvLog, Throwable, HttpResponse] = request => for {
+    strDebugForm <- openFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").bracket(closeFile) {
+      file =>Task(file.getLines.mkString.replace("req_json_text", CollectJsons.reqJsonText_))
     }
     _ <- logRequest(request)
 
     f <- ZIO.fromFuture { implicit ec =>
-      Future.successful(HttpResponse(StatusCodes.OK, entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)))
+      Future.successful(
+        HttpResponse(StatusCodes.OK, entity = HttpEntity(`text/html` withCharset `UTF-8`, strDebugForm)))
         .flatMap {
           result: HttpResponse => Future(result).map(_ => result)
         }
@@ -241,7 +229,6 @@ object ReqResp {
 
   val routeGetFavicon: HttpRequest => ZIO[ZEnvLog, Throwable, HttpResponse] = request => for {
     _ <- putStrLn(s"================= ${request.method} REQUEST ${request.protocol.value} =============")
-    //icoFile <- Task{new File("/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/favicon.png")}
     icoFile <- Task{new File("C:\\ws_fphp\\src\\main\\resources\\favicon.png")}
     f <- ZIO.fromFuture { implicit ec =>
       Future.successful(

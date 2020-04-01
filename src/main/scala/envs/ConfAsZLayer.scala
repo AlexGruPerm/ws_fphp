@@ -1,10 +1,11 @@
-package confs
+package envs
 
 import java.io.File
 import java.util.Properties
 
-import zio.RIO
-import zio.Task
+import data.{Cache, CacheEntity, DictDataRows}
+import pureconfig.ConfigSource
+import zio.{Has, RIO, Tagged, Task, UIO, ZIO, ZLayer}
 import pureconfig.ConfigSource
 import pureconfig.error.ConfigReaderFailures
 import pureconfig.generic.auto._
@@ -22,7 +23,7 @@ final case class DbConfig(
                            username: String,
                            password: String
                          ){
-  def urlWithDb = url + dbname
+  def urlWithDb: String = url + dbname
 
   def getJdbcProperties :Properties = {
     val props = new Properties()
@@ -32,25 +33,29 @@ final case class DbConfig(
   }
 }
 
-trait Configuration extends Serializable {
-  val config: Configuration.Service[Any]
-}
+object ConfAsZLayer {
+  //#1
+  type Configuration = zio.Has[Configuration.Service]
 
-object Configuration {
+  //#2
+  object Configuration {
 
-  trait Service[R] {
-    val load: String => RIO[R, Config]
+    //#3
+    trait Service {
+      val load: String => Task[Config]
+    }
+
+    //#4
+    trait wsConf extends Configuration.Service {
+      override val load: String => Task[Config] = confFileName =>
+        Task.effect(ConfigSource.file(new File(confFileName)).loadOrThrow[Config])
+    }
+
+    //#5
+    def wsConf(implicit tag: Tagged[Configuration.Service]): ZLayer[Any, Nothing, Configuration] = {
+      ZLayer.succeed(new wsConf {})
+    }
+
   }
 
-  /** Task.effect
-   * * Imports a synchronous effect into a pure `ZIO` value, translating any
-   * * throwables into a `Throwable` failure in the returned value.
-  */
-  val config: Service[Any] = new Service[Any] {
-    val load: String => Task[Config] = confFileName =>
-      Task.effect(ConfigSource.file(new File(confFileName)).loadOrThrow[Config])
-  }
 }
-
-
-

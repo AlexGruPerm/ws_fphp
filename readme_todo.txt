@@ -40,3 +40,9 @@ org.postgresql.util.PSQLException: FATAL: database "prm_salary" does not exist
 	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:677)
 	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:189)
 	at dbconn.jdbcSession.$anonfun$createPgSess$2(PgConnection.scala:52)
+
+3)
+/**
+ * timout on effects  https://zio.dev/docs/overview/overview_basic_concurrency
+ *    Timeout ZIO lets you timeout any effect using the ZIO#timeout method
+ */

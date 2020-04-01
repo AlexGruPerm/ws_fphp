@@ -1,31 +1,20 @@
 package dbconn
 
-import java.io.IOException
 import java.sql.Types
-import java.util
 import java.util.concurrent.TimeUnit
 import java.util.NoSuchElementException
 
-import akka.util.ByteString
-import confs.DbConfig
-import data.{Cache, CacheEntity, DictDataRows, DictRow}
-import envs.EnvContainer.ZEnvLog
-import io.circe.Printer
+import application.CacheLog
+import data.{CacheEntity, DictDataRows, DictRow}
+import envs.CacheAsZLayer.CacheManager
+import envs.DbConfig
+import envs.EnvContainer.ZEnvLogCache
 import org.postgresql.jdbc.PgResultSet
-import io.circe.generic.auto._
-import io.circe.syntax._
 import org.postgresql.util.PSQLException
 import reqdata.Dict
-import zio.clock.Clock
-import zio.console.putStrLn
-import zio.logging.{LogLevel, Logging, log, logInfo}
-import zio.{IO, RIO, Ref, Task, UIO, ZEnv, ZIO, clock}
+import zio.{IO, Task, ZIO, clock}
+import zio.logging.log
 
-
-//  loggetDict <- ZIO.access[Logging](_.logger)
-//  _ <- loggetDict.locallyAnnotate(correlationId, "db_get_dict") {
-//    log(LogLevel.Debug)(s"Connection opened for ${thisConfig.name} begin req ${trqDict.name}"/*conn.environment.connection.getClientInfo()*/)
-//  }
 
 object DbExecutor {
 
@@ -59,72 +48,54 @@ object DbExecutor {
     )
   }
 
-
-  private def getValueFromCache(hashKey: Int, cache: Ref[Cache]) = // :ZIO[ZEnv,NoSuchElementException,DictDataRows] =
-    cache.get.flatMap(dsCache =>
-      IO.effect(dsCache.dictsMap.get(hashKey).map(ce => ce.dictDataRows).get))
-      .refineToOrDie[NoSuchElementException]
-
-
-  private def updateValueInCache(hashKey: Int, cache: Ref[Cache], ds: Task[DictDataRows],
-                                 reftables: Option[Seq[String]]): Task[Unit] =
-    for {
-    dictRows <- ds
-    _ <- cache.update(cv => cv.copy(HeartbeatCounter = cv.HeartbeatCounter + 1,
-      dictsMap = cv.dictsMap + (hashKey -> CacheEntity(System.currentTimeMillis,dictRows, reftables.getOrElse(Seq()))))
-    )
-  } yield UIO.succeed(())
-
   import zio.blocking._
 
-  private def getDictFromCursor: (DbConfig, Dict, Ref[Cache]) => ZIO[ZEnv, Throwable, DictDataRows] =
-    (configuredDb, trqDict, cache) =>
+  private def getDictFromCursor: (DbConfig, Dict) => ZIO[ZEnvLogCache, Throwable, DictDataRows] =
+    (configuredDb, trqDict) =>
       for {
+        cache <- ZIO.access[CacheManager](_.get)
+        _ <- CacheLog.out("getDictFromCursor", false)
         thisConfig <-
-          if (configuredDb.name==trqDict.db) {
+          if (configuredDb.name == trqDict.db) {
             Task(configuredDb)
           }
           else {
             IO.fail(new NoSuchElementException(s"Database name [${trqDict.db}] not found in config."))
           }
-          //configuredDbList.find(dbc => dbc.name == trqDict.db)
-
-          //.mapError(_ => new NoSuchElementException(s"Database name [${trqDict.db}] not found in config."))
-
         tBeforeOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
-        //connections without pool.
-        //thisConnection <- (new PgConnection).sess(thisConfig, trqDict.name)
-        //connections with pool.
-        //thisConnection <- pgPool.sess(thisConfig,trqDict)
-        //todo: compare here, effect, effectBlocking or may be lock(ec)
         thisConnection <- effectBlocking(pgPool.sess(thisConfig, trqDict)).refineToOrDie[PSQLException]
         tAfterOpenConn <- clock.currentTime(TimeUnit.MILLISECONDS)
         openConnDuration = tAfterOpenConn - tBeforeOpenConn
-        //todo: try pass it direct (new PgConnection).sess(thisConfig)
         dsCursor = getCursorData(tBeforeOpenConn, thisConnection, trqDict, openConnDuration)
-        hashKey :Int = trqDict.hashCode() //todo: add user_session
-        _ <- updateValueInCache(hashKey, cache, dsCursor, trqDict.reftables)
+        hashKey: Int = trqDict.hashCode() //todo: add user_session
+        dictRows <- dsCursor
+        _ <- cache.set(hashKey, CacheEntity(System.currentTimeMillis, dictRows, trqDict.reftables.getOrElse(Seq())))
         ds <- dsCursor
-        //we absolutely need close it to return to the pool
+        // We absolutely need close it to return to the pool
         _ = thisConnection.sess.close()
-        //If this connection was obtained from a pooled data source, then it won't actually be closed, it'll just be returned to the pool.
+        // If this connection was obtained from a pooled data source, then it won't actually be closed,
+        // it'll just be returned to the pool.
       } yield ds
 
 
-  val getDict: (DbConfig, Dict, Ref[Cache]) => ZIO[ZEnvLog, Throwable, DictDataRows] =
-    (configuredDb, trqDict, cache) =>
-      (for {
-        valFromCache <- getValueFromCache(trqDict.hashCode(), cache)
-        _ <- logInfo(s">>>>>> value found in cache ${valFromCache.name} for hashKey=${trqDict.hashCode()}")
-      } yield valFromCache).foldM(
-         _ => for {
-          db <- getDictFromCursor(configuredDb, trqDict, cache)
-          _ <- logInfo(s"<<<<<< value get from db ${db.name}")
-           _ <- updateValueInCache(trqDict.hashCode(),cache,Task(db),trqDict.reftables)
-         } yield db,
-        v  => Task(v)
-  )
-
+  val getDict: (DbConfig, Dict) => ZIO[ZEnvLogCache, Throwable, DictDataRows] =
+    (configuredDb, trqDict) =>
+      for {
+        cache <- ZIO.access[CacheManager](_.get)
+        //todo: remove this 2 outputs.
+        //cv <- cache.getCacheValue
+        //_ <- log.trace(s"getDict HeartbeatCounter = ${cv.HeartbeatCounter} ")
+        valFromCache: Option[CacheEntity] <- cache.get(trqDict.hashCode())
+        dictRows <- valFromCache match {
+          case Some(s: CacheEntity) =>
+            log.trace(s"--- [VALUE GOT FROM CACHE] [${s.dictDataRows.name}] ---") *>
+              ZIO.succeed(s.dictDataRows)
+          case None => for {
+            db <- getDictFromCursor(configuredDb, trqDict)
+            _ <- log.trace(s"--- [VALUE GOT FROM DB] [${db.name}] ---")
+          } yield db
+        }
+      } yield dictRows
 
 }
 

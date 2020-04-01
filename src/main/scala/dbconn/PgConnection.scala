@@ -3,7 +3,7 @@ package dbconn
 import java.sql.{Connection, DriverManager, ResultSet, Statement}
 import java.util.Properties
 
-import confs.DbConfig
+import envs.DbConfig
 import org.postgresql.PGConnection
 import org.postgresql.util.PSQLException
 import zio.Task
