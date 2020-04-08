@@ -212,9 +212,12 @@ object ReqResp {
 
   //"/home/gdev/data/home/data/PROJECTS/ws_fphp/src/main/resources/debug_post.html"
   val routeGetDebug: HttpRequest => ZIO[ZEnvLog, Throwable, HttpResponse] = request => for {
-    strDebugForm <- openFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").bracket(closeFile) {
+    strDebugForm <- openFile("debug_post.html").bracket(closeFile) {
       file =>Task(file.getLines.mkString.replace("req_json_text", CollectJsons.reqJsonText_))
-    }
+    } orElse
+      openFile("C:\\ws_fphp\\src\\main\\resources\\debug_post.html").bracket(closeFile) {
+        file =>Task(file.getLines.mkString.replace("req_json_text", CollectJsons.reqJsonText_))
+      }
     _ <- logRequest(request)
 
     f <- ZIO.fromFuture { implicit ec =>

@@ -21,7 +21,8 @@ object Main extends App {
     for {
       _ <- log.info("Web service starting")
       _ <- checkArgs(args)
-      cfg <- ZIO.access[Configuration](_.get.load("C:\\ws_fphp\\src\\main\\resources\\application.conf"))
+      cfg <-  ZIO.access[Configuration](_.get.load(args.head))
+      //cfg <-  ZIO.access[Configuration](_.get.load("C:\\ws_fphp\\src\\main\\resources\\application.conf"))
       res <- WebService.startService(cfg)
       _ <- log.info("Web service stopping")
     } yield res

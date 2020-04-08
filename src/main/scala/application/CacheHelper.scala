@@ -77,7 +77,7 @@ object CacheHelper {
       _ <- if (notifications.nonEmpty) {
         log.trace(s"notifications size = ${notifications.size}")
       } else {
-        UIO.succeed()
+        UIO.succeed(())
       }
       _ <- cacheCleaner(notifications)
     } yield ()
