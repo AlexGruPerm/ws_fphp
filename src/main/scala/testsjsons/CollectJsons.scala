@@ -26,7 +26,26 @@ object CollectJsons {
       |             }
       |""".stripMargin
 
-   val reqJsonText_ =
+  val reqJsonText_ =
+    """
+      |              { "user_session" : "c4ec52189bd51acb95bc2a5082c7c014",
+      |                "cont_encoding_gzip_enabled" : 1,
+      |                 "thread_pool" : "block",
+      |                 "request_timeout_ms": 5000,
+      |                 "cache_live_time" : 60000,
+      |                "dicts": [
+      |                {
+      |                  "name" : "okfs_users",
+      |                  "db" : "dbp",
+      |                  "proc":"prm_salary.pkg_web_cons_rep_okfs_users(refcur => ?)",
+      |                  "reftables" : ["prm_salary.sl_d_okfs","prm_admin.t_users"]
+      |                }
+      |              ]
+      |             }
+      |""".stripMargin
+
+
+  val reqJsonText_123 =
     """
       |              { "user_session" : "c4ec52189bd51acb95bc2a5082c7c014",
       |                "cont_encoding_gzip_enabled" : 1,

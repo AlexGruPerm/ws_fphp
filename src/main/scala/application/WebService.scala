@@ -44,6 +44,11 @@ object WebService {
             .repeat(Schedule.spaced(3.second)).forkDaemon *>
             cacheChecker.repeat(Schedule.spaced(2.second)).forkDaemon
 
+          /*
+          checkTermSignal <- checkTerm.repeat(Schedule.spaced(3.second)).forkDaemon
+          _ <- checkTermSignal.join
+          */
+
           _ <- cacheCheckerValidator.join //todo: may be divide on 2 separate forkDeamon
         } yield ()
     )
