@@ -1,5 +1,9 @@
 package application
 
+import java.io.IOException
+
+import akka.Done
+import akka.actor.ActorSystem
 import data.CacheEntity
 import dbconn.PgConnection
 import envs.CacheAsZLayer.CacheManager
@@ -8,6 +12,9 @@ import envs.EnvContainer.{ZEnvLog, ZEnvLogCache}
 import org.postgresql.PGNotification
 import zio.{Schedule, UIO, ZIO}
 import zio.logging.log
+import zio._
+
+import scala.concurrent.{ExecutionContextExecutor, Future}
 
 object CacheHelper {
 
@@ -91,14 +98,27 @@ object CacheHelper {
 
 
   /**
-   * Read user input for interrupt main thread.
+   * Read user input and raise Exception if not empty.
    * https://github.com/zio/zio/pull/113
    * https://github.com/zio/zio/issues/74
    */
-  val readUserInterrupt: ZIO[ZEnvLogCache, Throwable, Unit] =
+    import zio.duration._
+  val readUserInterrupt: (Fiber.Runtime[Throwable, Future[Done]], ActorSystem) =>
+    ZIO[ZEnvLogCache, Throwable, Unit] = (fiber, actorSystem) => {
+    implicit val executionContext: ExecutionContextExecutor = actorSystem.dispatcher
     for {
       userInput <- zio.console.getStrLn
-      _ <- log.info(userInput)
-    } yield ()
+      exit <- if (userInput.nonEmpty) {
+        log.error(s"-----------------------------------------------------------") *>
+        log.error(s"User interrupt web service by console input = $userInput") *>
+        log.error(s"-----------------------------------------------------------") *>
+        ZIO.sleep(3.seconds) *>
+        Task.fail(new Exception("Web service interrupted by user."))
+      }
+      else {
+        UIO.succeed(())
+      }
+    } yield exit
+  }
 
 }

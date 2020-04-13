@@ -42,7 +42,9 @@ object WebService {
 
           cacheCheckerValidator <- cacheValidator(conf.dbListenConfig, thisConnection)
             .repeat(Schedule.spaced(3.second)).forkDaemon *>
-            cacheChecker.repeat(Schedule.spaced(2.second)).forkDaemon
+            cacheChecker.repeat(Schedule.spaced(2.second)).forkDaemon *>
+            readUserInterrupt(fiber,actorSystem).repeat(
+              Schedule.spaced(1.second)).forkDaemon
 
           /*
           checkTermSignal <- checkTerm.repeat(Schedule.spaced(3.second)).forkDaemon
