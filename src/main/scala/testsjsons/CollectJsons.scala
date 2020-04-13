@@ -26,7 +26,7 @@ object CollectJsons {
       |             }
       |""".stripMargin
 
-  val reqJsonText_ =
+  val reqJsonText_1 =
     """
       |              { "user_session" : "c4ec52189bd51acb95bc2a5082c7c014",
       |                "cont_encoding_gzip_enabled" : 1,
@@ -45,7 +45,7 @@ object CollectJsons {
       |""".stripMargin
 
 
-  val reqJsonText_123 =
+  val reqJsonText_ =
     """
       |              { "user_session" : "c4ec52189bd51acb95bc2a5082c7c014",
       |                "cont_encoding_gzip_enabled" : 1,
@@ -62,43 +62,43 @@ object CollectJsons {
       |                    "name" : "position_group",
       |                    "db" : "dbp",
       |                    "proc" : "prm_salary.pkg_web_posit_rep_position_group_list(refcur => ?)",
-      |                    "reftables" : ["sl_d_position_group" ]
+      |                    "reftables" : ["prm_salary.sl_d_position_group" ]
       |                  },
       |                  {
       |                    "name" : "category_list",
       |                    "db" : "dbp",
       |                    "proc" : "prm_salary.pkg_web_cons_rep_edict_category_list(refcur => ?)",
-      |                    "reftables" : ["sl_d_edict_category" ]
+      |                    "reftables" : ["prm_salary.sl_d_edict_category" ]
       |                  },
       |                  {
       |                    "name" : "oiv",
       |                    "db" : "dbp",
       |                    "proc" : "prm_salary.pkg_web_cons_rep_grbs_list(refcur => ?, p_user_id => 45224506)",
-      |                    "reftables" : ["sl_user_access","sl_d_grbs","sl_f_cons_rep","sl_inst_grbs_link","sl_institution" ]
+      |                    "reftables" : ["prm_salary.sl_user_access","prm_salary.sl_d_grbs","prm_salary.sl_f_cons_rep","prm_salary.sl_inst_grbs_link","prm_salary.sl_institution" ]
       |                  },
       |                {
       |                 "name" : "institution",
       |                  "db" : "dbp",
       |                  "proc" : "prm_salary.pkg_web_cons_rep_institution_list(refcur => ?, p_user_id => 45224506)",
-      |                  "reftables" : ["sl_inst_grbs_link","sl_user_access","sl_d_institution_data_indication","sl_d_institution"]
+      |                  "reftables" : ["prm_salary.sl_inst_grbs_link","prm_salary.sl_user_access","prm_salary.sl_d_institution_data_indication","prm_salary.sl_d_institution"]
       |                },
       |                {
       |                  "name" : "industry_class",
       |                  "db" : "dbp",
       |                  "proc":"prm_salary.pkg_web_cons_rep_form_type_list(refcur => ?)",
-      |                  "reftables" : ["sl_f_cons_rep_hor","sl_d_industry_class"]
+      |                  "reftables" : ["prm_salary.sl_f_cons_rep_hor","prm_salary.sl_d_industry_class"]
       |                },
       |                {
       |                  "name" : "territory",
       |                  "db" : "dbp",
       |                  "proc":"prm_salary.pkg_web_cons_rep_territory_list(refcur => ?)",
-      |                  "reftables" : ["sl_f_cons_rep","sl_d_territory"]
+      |                  "reftables" : ["prm_salary.sl_f_cons_rep","prm_salary.sl_d_territory"]
       |                },
       |                {
       |                  "name" : "okfs",
       |                  "db" : "dbp",
       |                  "proc":"prm_salary.pkg_web_cons_rep_okfs_list(refcur => ?)",
-      |                  "reftables" : ["sl_d_okfs"]
+      |                  "reftables" : ["prm_salary.sl_d_okfs"]
       |                }
       |              ]
       |             }
