@@ -89,4 +89,16 @@ object CacheHelper {
   private def hashKeysForRemove(dictsMape: Map[Int, CacheEntity], tableName: String) :Seq[Int] =
     dictsMape.mapValues(v => v.reftables.contains(tableName)).withFilter(_._2).map(_._1).toSeq
 
+
+  /**
+   * Read user input for interrupt main thread.
+   * https://github.com/zio/zio/pull/113
+   * https://github.com/zio/zio/issues/74
+   */
+  val readUserInterrupt: ZIO[ZEnvLogCache, Throwable, Unit] =
+    for {
+      userInput <- zio.console.getStrLn
+      _ <- log.info(userInput)
+    } yield ()
+
 }
